@@ -12,18 +12,22 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 
+from decouple import config
+
 # Build paths inside the projects like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Cargar el path de la base de datos SQLite correctamente
+DB_SQLITE_PATH = BASE_DIR / config('DB_NAME', default='db.sqlite3')
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-3=sm3a$%-7&y^d-ad&gt%j@6u5^8b$r=_xgqq5e#3i(39&oyf_'
+SECRET_KEY = config('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config('DEBUG', default=False, cast=bool)
 
 ALLOWED_HOSTS = []
 
@@ -41,7 +45,7 @@ INSTALLED_APPS = [
     'projects.apps.ProjectConfig',
     'design.apps.DesignConfig',
     'selection.apps.SelectionConfig',
-    'papers.apps.PaperManagementConfig',
+    'paper_management.apps.PaperManagementConfig',
     'user_management.apps.UserManagementConfig'
 ]
 
@@ -81,8 +85,13 @@ WSGI_APPLICATION = 'DjangoProject.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        # <-- 4. Configuración desacoplada
+        'ENGINE': config('DB_ENGINE', default='django.db.backends.sqlite3'),
+        'NAME': DB_SQLITE_PATH if 'sqlite3' in config('DB_ENGINE', default='') else config('DB_NAME'),
+        'USER': config('DB_USER', default=''),
+        'PASSWORD': config('DB_PASSWORD', default=''),
+        'HOST': config('DB_HOST', default=''),
+        'PORT': config('DB_PORT', default=''),
     }
 }
 

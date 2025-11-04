@@ -26,18 +26,6 @@ class Paper(models.Model):
     year = models.IntegerField(null=True, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
     fulltext = models.TextField(blank=True)
-    status = models.CharField(
-        max_length=20,
-        choices=Status.choices,
-        default=Status.PENDING,
-        db_index=True
-    )
-    uploaded_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL, # Mantener el paper si el uploader se va
-        null=True,
-        related_name='uploaded_papers'
-    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
