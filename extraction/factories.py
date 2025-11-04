@@ -1,13 +1,22 @@
-# extraction_app/factories.py
 import factory
 from factory.django import DjangoModelFactory
 
-# ¡Importas las factories de las OTRAS apps!
+# Importas factories de OTRAS apps
 from papers.factories import PaperFactory
-from design.factories import ResearchQuestionFactory
+from user_management.factories import UserFactory
 
-# Importas tus propios modelos (usando el nuevo paquete)
-from .models import Quote, Tag
+# Importas modelos de TU app (asumiendo que los refactorizaste)
+from .models.core import Quote
+from .models.external import ExtractionPaper
+from .models.tagging import Tag
+
+class ExtractionRecordFactory(DjangoModelFactory):
+    class Meta:
+        model = ExtractionPaper
+
+    paper = factory.SubFactory(PaperFactory) # ¡Crea un Paper automáticamente!
+    status = 'Pending'
+    assigned_to = factory.SubFactory(UserFactory)
 
 class TagFactory(DjangoModelFactory):
     class Meta:
@@ -16,28 +25,21 @@ class TagFactory(DjangoModelFactory):
 
     name = factory.Faker('word')
     color = factory.Faker('hex_color')
-    type = 'inductive'
-    question = factory.SubFactory(ResearchQuestionFactory) # Crea la dependencia
+    # ...
 
 class QuoteFactory(DjangoModelFactory):
     class Meta:
         model = Quote
 
-    text_portion = factory.Faker('paragraph', nb_sentences=4)
-    location = factory.Faker('random_int', min=1, max=100, step=1)
+    # Para que esta factory funcione, necesita un ExtractionRecord
+    # PERO Quote tiene FK a Paper, no a ExtractionRecord...
+    # Corrijamos tu modelo original: Quote DEBERÍA tener FK a ExtractionRecord
+    # Si Quote.paper es FK(Paper):
+    text_portion = factory.Faker('paragraph')
+    paper = factory.SubFactory(PaperFactory) # Asumiendo FK a Paper
+    researcher = factory.SubFactory(UserFactory)
 
-    # Aquí está la magia:
-    # factory-boy crea un Paper usando PaperFactory automáticamente
-    paper = factory.SubFactory(PaperFactory)
-
-    # Añade un tag aleatorio (si la relación M2M existe)
     @factory.post_generation
     def tags(self, create, extracted, **kwargs):
-        if not create:
-            return
-        if extracted:
-            for tag in extracted:
-                self.tags.add(tag)
-        else:
-            # Crea un tag por defecto si no se pasó ninguno
-            self.tags.add(TagFactory())
+        if create:
+            self.tags.add(TagFactory()) # Añade un tag
