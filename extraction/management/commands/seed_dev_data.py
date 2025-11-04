@@ -3,7 +3,7 @@ from django.db import transaction
 import random
 
 from extraction.models import Quote, Tag
-from extraction.models.external import ExtractionPaper
+from extraction.models.records import ExtractionPaper
 from papers.models import Paper
 # Importa todas las factories que usarás
 from user_management.factories import UserFactory

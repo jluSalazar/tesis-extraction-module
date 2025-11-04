@@ -45,7 +45,7 @@ INSTALLED_APPS = [
     'projects.apps.ProjectConfig',
     'design.apps.DesignConfig',
     'selection.apps.SelectionConfig',
-    'paper_management.apps.PaperManagementConfig',
+    'papers.apps.PaperManagementConfig',
     'user_management.apps.UserManagementConfig'
 ]
 

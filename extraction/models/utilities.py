@@ -1,8 +1,8 @@
 from django.db import models
 from django.conf import settings
 
+from extraction.models.records import ExtractionRecord
 # Dependencia del módulo central 'papers'
-from papers.models import Paper
 
 class ErrorHandler(models.Model):
     """
@@ -10,7 +10,7 @@ class ErrorHandler(models.Model):
     como la falta de tags mandatorios.
     """
     paper = models.ForeignKey(
-        Paper,
+        ExtractionRecord,
         on_delete=models.CASCADE,
         related_name='extraction_errors'
     )

@@ -7,7 +7,7 @@ from user_management.factories import UserFactory
 
 # Importas modelos de TU app (asumiendo que los refactorizaste)
 from .models.core import Quote
-from .models.external import ExtractionPaper
+from .models.records import ExtractionPaper
 from .models.tagging import Tag
 
 class ExtractionRecordFactory(DjangoModelFactory):

@@ -2,7 +2,7 @@ from django.db import models
 from django.conf import settings
 
 # Dependencias
-from papers.models import Paper # Módulo central
+from .records import ExtractionRecord
 from .tagging import Tag        # Módulo local (dentro de la app)
 
 class Quote(models.Model):
@@ -12,7 +12,7 @@ class Quote(models.Model):
     """
     text_portion = models.TextField()
     paper = models.ForeignKey(
-        Paper,
+        ExtractionRecord,
         on_delete=models.CASCADE, # Si se borra el Paper, sus Quotes se van
         related_name='quotes'
     )

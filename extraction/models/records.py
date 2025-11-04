@@ -3,7 +3,7 @@ from django.db import models
 from django.conf import settings
 from papers.models import Paper
 
-class ExtractionPaper(models.Model):
+class ExtractionRecord(models.Model):
     # Enlace 1-a-1 con el Paper. Cada paper solo tiene un registro de extracción.
     paper = models.OneToOneField(
         Paper,
