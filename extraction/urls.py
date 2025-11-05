@@ -10,4 +10,9 @@ urlpatterns = [
     # Ejemplo (aún no lo añadas si no tienes la vista):
     # path('quotes/', views.QuoteListView.as_view(), name='quote-list'),
     # path('quotes/<int:pk>/', views.QuoteDetailView.as_view(), name='quote-detail'),
+    path(
+            'pending/',
+            views.PendingExtractionListView.as_view(),
+            name='pending-list'
+        ),
 ]
