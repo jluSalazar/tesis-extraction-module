@@ -14,7 +14,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.AddField(
-            model_name='paper',
+            model_name='papers',
             name='uploaded_by',
             field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='uploaded_papers', to=settings.AUTH_USER_MODEL),
         ),

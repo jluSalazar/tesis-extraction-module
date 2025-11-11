@@ -21,7 +21,7 @@ class Migration(migrations.Migration):
                 ('status', models.CharField(choices=[('Pending', 'Pending'), ('InProgress', 'In Progress'), ('Done', 'Done')], default='Pending', max_length=50)),
                 ('last_modified', models.DateTimeField(auto_now=True)),
                 ('assigned_to', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='extraction_assignments', to=settings.AUTH_USER_MODEL)),
-                ('paper', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='extraction_record', to='papers.paper')),
+                ('papers', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='extraction_record', to='papers.papers')),
             ],
             options={
                 'verbose_name': 'Extraction Record',
@@ -30,12 +30,12 @@ class Migration(migrations.Migration):
         ),
         migrations.AlterField(
             model_name='errorhandler',
-            name='paper',
+            name='papers',
             field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='extraction_errors', to='extraction.extractionrecord'),
         ),
         migrations.AlterField(
             model_name='quote',
-            name='paper',
+            name='papers',
             field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='quotes', to='extraction.extractionrecord'),
         ),
     ]

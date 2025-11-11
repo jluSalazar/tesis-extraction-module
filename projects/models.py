@@ -8,7 +8,7 @@ class ResearchProject(models.Model):
     Es la entidad raíz para la mayoría de las operaciones.
     """
     class Status(models.TextChoices):
-        DRAFT = 'Draft', _('Draft')
+        DESIGN_ACTIVE = 'DesignActive', _('DesignActive')
         EXTRACTION_ACTIVE = 'ExtractionActive', _('Extraction Active')
         CLOSED = 'Closed', _('Closed')
 
@@ -23,7 +23,7 @@ class ResearchProject(models.Model):
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
-        default=Status.DRAFT,
+        default=Status.DESIGN_ACTIVE,
         db_index=True # Indexamos para búsquedas por estado
     )
 

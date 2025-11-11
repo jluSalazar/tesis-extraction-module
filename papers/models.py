@@ -8,7 +8,7 @@ from projects.models import ResearchProject
 
 class Paper(models.Model):
     """
-    Representa un documento (paper) a ser analizado.
+    Representa un documento (papers) a ser analizado.
     """
     # ... (project, title, authors, year, etc. se mantienen igual) ...
     project = models.ForeignKey(
@@ -21,16 +21,14 @@ class Paper(models.Model):
     year = models.IntegerField(null=True, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
     fulltext = models.TextField(blank=True)
+    path =  models.TextField(blank=True)
 
-    # --- CAMPO AÑADIDO AQUÍ ---
-    # Este campo faltaba en tu modelo pero la factory lo estaba proveyendo.
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,  # Mantener el paper si el uploader se va
+        on_delete=models.SET_NULL,
         null=True,
         related_name='uploaded_papers'
     )
-    # --- FIN DEL CAMPO AÑADIDO ---
 
     created_at = models.DateTimeField(auto_now_add=True)
 

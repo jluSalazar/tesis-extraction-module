@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import (
-    Extraction,
+    ExtractionPhase,
     ExtractionRecord,
     Tag,
     Quote,
@@ -9,7 +9,7 @@ from .models import (
 )
 
 # Registramos los modelos para que aparezcan en el admin
-admin.site.register(Extraction)
+admin.site.register(ExtractionPhase)
 admin.site.register(ExtractionRecord)
 admin.site.register(Tag)
 admin.site.register(Quote)

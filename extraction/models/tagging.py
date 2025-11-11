@@ -9,6 +9,7 @@ class Tag(models.Model):
     """
     Representa un Tag (o "código") que puede ser aplicado a las Quotes.
     """
+
     class TagType(models.TextChoices):
         DEDUCTIVE = 'deductive', _('Deductivo')
         INDUCTIVE = 'inductive', _('Inductivo')
@@ -25,7 +26,7 @@ class Tag(models.Model):
     )
     question = models.ForeignKey(
         ResearchQuestion,
-        on_delete=models.SET_NULL, # No borrar tag si se borra la pregunta
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='tags'
@@ -37,6 +38,9 @@ class Tag(models.Model):
     )
     is_mandatory = models.BooleanField(default=False)
     is_public = models.BooleanField(default=True)
+
+    # Relación genérica inversa para comentarios
+    comments = GenericRelation(Comment, related_query_name='tag')
 
     def __str__(self):
         return self.name

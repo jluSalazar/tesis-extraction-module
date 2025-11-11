@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.AddField(
-            model_name='paper',
+            model_name='papers',
             name='project',
             field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='papers', to='projects.researchproject'),
         ),

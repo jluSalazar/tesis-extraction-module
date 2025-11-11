@@ -16,7 +16,7 @@ class ExtractionRecordQuerySet(models.QuerySet):
         return self.filter(
             assigned_to=user,
             status='Pending'
-        ).select_related('paper')  # JOIN con la tabla de papers
+        ).select_related('papers')  # JOIN con la tabla de papers
 
 
 # --- 2. Manager ---
@@ -32,7 +32,7 @@ class ExtractionRecordManager(models.Manager):
         return self.get_queryset().get_pending_for_user(user)
 
 class ExtractionRecord(models.Model):
-    # Enlace 1-a-1 con el Paper. Cada paper solo tiene un registro de extracción.
+    # Enlace 1-a-1 con el Paper. Cada papers solo tiene un registro de extracción.
     paper = models.OneToOneField(
         Paper,
         on_delete=models.CASCADE,

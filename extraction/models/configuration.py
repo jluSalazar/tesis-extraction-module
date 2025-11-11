@@ -4,17 +4,15 @@ from django.db import models
 from projects.models import ResearchProject
 
 
-class Extraction(models.Model):
+class ExtractionPhase(models.Model):
     """
     Configuración de la fase de extracción para un Proyecto específico.
     """
-    # Esta es una adición lógica clave. Una configuración de extracción
-    # no puede existir sin un proyecto. Usamos OneToOneField porque
-    # solo hay UNA configuración de extracción por proyecto.
+
     project = models.OneToOneField(
         ResearchProject,
         on_delete=models.CASCADE,
-        related_name='extraction_config'
+        related_name='extraction_phase'
     )
 
     start_date = models.DateTimeField(null=True, blank=True)
@@ -25,4 +23,4 @@ class Extraction(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Configuración de Extracción para: {self.project.title}"
+        return f"Fase de Extracción para: {self.project.title}"

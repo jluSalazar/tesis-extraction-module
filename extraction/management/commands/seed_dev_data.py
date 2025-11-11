@@ -120,7 +120,7 @@ class Command(BaseCommand):
 
             # 2f. Crear Quotes y Comentarios para cada Registro
             for record in project_records:
-                # Crea 3-8 quotes por paper
+                # Crea 3-8 quotes por papers
                 quotes = QuoteFactory.create_batch(
                     random.randint(3, 8),
                     paper=record,  # FK a ExtractionRecord

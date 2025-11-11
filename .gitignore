@@ -83,3 +83,5 @@ htmlcov/
 .nox/
 pytest_cache/
 .cache/
+
+/papers_test/
