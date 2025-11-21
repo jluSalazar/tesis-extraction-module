@@ -1,0 +1,17 @@
+from abc import ABC, abstractmethod
+from typing import Any
+
+
+class IStudyRepository(ABC):
+    """
+    Puerto para comunicarse con el Bounded Context de 'Studies' (o Papers).
+    Retorna un DTO o Dict genérico, ya que 'Study' no es una entidad de ESTE dominio.
+    """
+
+    @abstractmethod
+    def get_study_details(self, study_id: int) -> dict:
+        pass
+
+    @abstractmethod
+    def exists(self, study_id: int) -> bool:
+        pass

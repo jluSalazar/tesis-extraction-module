@@ -1,0 +1,22 @@
+from dataclasses import dataclass
+from typing import Optional
+
+from ..value_objects.tag_status import TagStatus
+from ..value_objects.tag_type import TagType
+from ..value_objects.tag_visibility import TagVisibility
+
+
+@dataclass(frozen=True)
+class Tag:
+    """
+    Entidad.
+    Los Tags suelen ser definidos a nivel de Proyecto/Estudio,
+    pero se usan aquí. Frozen para simular inmutabilidad en este contexto.
+    """
+    id: int
+    name: str
+    is_mandatory: bool
+    created_by_user_id: int
+    status: TagStatus = TagStatus.PENDING
+    visibility: TagVisibility = TagVisibility.PRIVATE
+    type: TagType = TagType.DEDUCTIVE
