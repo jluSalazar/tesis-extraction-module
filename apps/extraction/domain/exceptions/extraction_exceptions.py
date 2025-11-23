@@ -13,3 +13,23 @@ class ExtractionNotFound(ExtractionException):
 class UnauthorizedExtractionAccess(ExtractionException):
     """Error de permisos a nivel de dominio."""
     pass
+
+class InvalidExtractionState(ExtractionException):
+    """Error cuando la extracción no está en el estado correcto."""
+    pass
+
+class StudyNotFound(ExtractionException):
+    """Error cuando el estudio no existe."""
+    pass
+
+class TagNotFound(ExtractionException):
+    """Error cuando un tag no existe."""
+    pass
+
+class ProjectAccessDenied(ExtractionException):
+    """Error cuando el usuario no tiene acceso al proyecto."""
+    pass
+
+class QuoteValidationError(ExtractionException):
+    """Error de validación en quotes."""
+    pass

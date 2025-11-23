@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Optional
 
 
 class IAcquisitionRepository(ABC):
@@ -14,4 +14,8 @@ class IAcquisitionRepository(ABC):
 
     @abstractmethod
     def exists(self, study_id: int) -> bool:
+        pass
+
+    @abstractmethod
+    def get_project_context(self, study_id: int) -> Optional[int]:
         pass

@@ -11,9 +11,8 @@ class DjangoQuoteRepository(IQuoteRepository):
     @transaction.atomic
     def save(self, quote: Quote) -> Quote:
         # 1. Mapear a Dict para el modelo
-        # Nota: No podemos pasar 'tags' directamente en el create/update
         data = {
-            'extraction_id': quote.extraction_id,  # Asegúrate que la entidad Quote tenga esto
+            'extraction_id': quote.extraction_id,
             'text_portion': quote.text,
             'location': quote.location,
             'researcher_id': quote.researcher_id,

@@ -19,39 +19,44 @@ class DjangoTagRepository(ITagRepository):
         return TagMapper.to_domain(model)
 
     def save(self, tag: Tag) -> Tag:
-        # Mapeo inverso manual o simple
-        data = {
-            'name': tag.name,
-            'is_mandatory': tag.is_mandatory,
-            'created_by_user_id': tag.created_by_user_id,
-            'project_id': tag.project_id,
-            'question_id': tag.question_id,
-            'status': tag.status.value,
-            'visibility': tag.visibility.value,
-            'type': tag.type.value
-        }
+        data = TagMapper.to_db(tag)
 
-        obj, created = TagModel.objects.update_or_create(
-            pk=tag.id,
-            defaults=data
-        )
-        return TagMapper.to_domain(obj)
+        if tag.id:
+            TagModel.objects.filter(pk=tag.id).update(**data)
+            model = TagModel.objects.get(pk=tag.id)
+        else:
+            model = TagModel.objects.create(**data)
+            tag.id = model.id
+
+        return TagMapper.to_domain(model)
 
     def delete(self, tag: Tag) -> None:
         TagModel.objects.filter(pk=tag.id).delete()
 
     def get_mandatory_tags_for_project_context(self, study_id: int) -> List[Tag]:
-        # Opción 1: Join si Study está en la misma DB (Monolito) y tienes FK
-        # Opción 2 (Mejor para desacoplar): Pasar project_id explícitamente desde el Handler
-        # Opción 3 (Tu caso): Obtener project_id vía adapter
-
-        # Asumiendo que TagModel tiene project_id
         project_id = self.acquisition_adapter.get_project_context(study_id)
-        qs = TagModel.objects.filter(project_id=project_id, is_mandatory=True)
+        if not project_id:
+            return []
+
+        qs = TagModel.objects.filter(
+            project_id=project_id,
+            is_mandatory=True,
+            status='Approved'
+        )
         return [TagMapper.to_domain(t) for t in qs]
 
-    def list_available_tags_for_user(self, user_id: int, project_id: int) -> List[Tag]:
-        qs = TagModel.objects.filter(project_id=project_id).filter(
-            Q(visibility='Public') | Q(created_by_id=user_id)  # created_by_id asumiendo FK de Django
-        )
+    def list_available_tags_for_user(
+            self,
+            user_id: int,
+            project_id: int
+    ) -> List[Tag]:
+        qs = TagModel.objects.filter(
+            project_id=project_id
+        ).filter(
+            Q(visibility='Public') |
+            Q(created_by_user_id=user_id)
+        ).filter(
+            status='Approved'
+        ).distinct()
+
         return [TagMapper.to_domain(m) for m in qs]

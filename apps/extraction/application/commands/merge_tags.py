@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from django.db import transaction
+
 
 @dataclass
 class MergeTagsCommand:
@@ -12,6 +14,7 @@ class MergeTagsHandler:
         self.tag_repo = tag_repo
         self.merge_service = merge_service
 
+    @transaction.atomic
     def handle(self, command):
         target = self.tag_repo.get_by_id(command.target_tag_id)
         source = self.tag_repo.get_by_id(command.source_tag_id)

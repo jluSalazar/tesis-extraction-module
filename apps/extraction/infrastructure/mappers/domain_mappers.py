@@ -40,23 +40,9 @@ class ExtractionMapper:
         }
 
 
-class QuoteMapper:
-    @staticmethod
-    def to_domain(model: QuoteModel) -> Quote:
-        tags_domain = [TagMapper.to_domain(t) for t in model.tags.all()]
-        return Quote(
-            id=model.id,
-            text=model.text_portion,
-            location=model.location,
-            researcher_id=model.researcher_id,
-            tags=tags_domain
-        )
-
-
 class TagMapper:
     @staticmethod
     def to_domain(model: TagModel) -> Tag:
-        # Lógica de mapeo simple
         return Tag(
             id=model.id,
             name=model.name,
@@ -70,15 +56,39 @@ class TagMapper:
         )
 
     @staticmethod
-    def to_db(entity: Tag) -> TagModel:
-        return TagModel(
-            id=entity.id,
-            name=entity.name,
-            project_id=entity.project_id,
-            is_mandatory=entity.is_mandatory,
-            created_by_user_id=entity.created_by_user_id,
-            question_id=entity.question_id,
-            status=entity.status.value,
-            visibility=entity.visibility.value,
-            type=entity.type.value,
+    def to_db(entity: Tag) -> dict:  # ✅ Retorna dict
+        """Retorna diccionario para crear/actualizar modelo Django"""
+        return {
+            'name': entity.name,
+            'project_id': entity.project_id,
+            'is_mandatory': entity.is_mandatory,
+            'created_by_user_id': entity.created_by_user_id,
+            'question_id': entity.question_id,
+            'status': entity.status.value,
+            'visibility': entity.visibility.value,
+            'type': entity.type.value,
+        }
+
+
+class QuoteMapper:
+    @staticmethod
+    def to_domain(model: QuoteModel) -> Quote:
+        tags_domain = [TagMapper.to_domain(t) for t in model.tags.all()]
+        return Quote(
+            id=model.id,
+            extraction_id=model.extraction_id,  # ✅ Agregar
+            text=model.text_portion,
+            location=model.location,
+            researcher_id=model.researcher_id,
+            tags=tags_domain
         )
+
+    @staticmethod
+    def to_db(entity: Quote) -> dict:  # ✅ Nuevo método
+        """Retorna diccionario para crear/actualizar modelo Django"""
+        return {
+            'extraction_id': entity.extraction_id,
+            'text_portion': entity.text,
+            'location': entity.location,
+            'researcher_id': entity.researcher_id,
+        }

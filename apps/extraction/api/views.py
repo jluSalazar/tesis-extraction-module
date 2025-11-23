@@ -1,7 +1,9 @@
+# apps/extraction/api/views.py
+
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from drf_yasg.utils import swagger_auto_schema  # Opcional, para doc
+from django.db import transaction
 
 from ..container import container
 from ..application.commands.create_extraction import CreateExtractionCommand
@@ -13,39 +15,61 @@ from ..application.commands.merge_tags import MergeTagsCommand
 from ..application.queries.get_extraction import GetExtractionQuery
 from ..application.queries.list_extractions import ListExtractionsQuery
 
-from . import serializers as dtos  # Alias para diferenciar
-from ..domain.exceptions.extraction_exceptions import ExtractionValidationError
+from . import serializers as dtos
+from ..domain.exceptions.extraction_exceptions import (  # ✅
+    ExtractionException,
+    ExtractionValidationError,
+    ExtractionNotFound,
+    UnauthorizedExtractionAccess,
+    InvalidExtractionState,
+    StudyNotFound,
+    TagNotFound,
+    ProjectAccessDenied,
+)
 
 
 class ExtractionViewSet(viewsets.ViewSet):
     """Maneja el Aggregate Root: Extraction"""
 
-    def list(self, request):
-        query = ListExtractionsQuery(user_id=request.user.id)
-        extractions = container.list_extractions_handler.handle(query)
-        # Nota: Aquí deberíamos tener un serializer de salida para la lista
-        data = [{"id": e.id, "status": e.status, "study_id": e.study_id} for e in extractions]
-        return Response(data, status=status.HTTP_200_OK)
+    def _handle_exception(self, exc: Exception) -> Response:  # ✅ Helper
+        """Maneja excepciones de forma consistente"""
+        if isinstance(exc, ExtractionNotFound):
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        elif isinstance(exc, UnauthorizedExtractionAccess):
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        elif isinstance(exc, (StudyNotFound, TagNotFound)):
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        elif isinstance(exc, (ExtractionValidationError, InvalidExtractionState)):
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY
+            )
+        elif isinstance(exc, ExtractionException):
+            return Response(
+                {"error": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        else:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.exception("Error inesperado en ExtractionViewSet")
+            return Response(
+                {"error": "Error interno del servidor"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-    def retrieve(self, request, pk=None):
-        query = GetExtractionQuery(extraction_id=int(pk))
-        try:
-            extraction = container.get_extraction_handler.handle(query)
-            # Mapeo manual a respuesta o usar un Serializer de Salida
-            # Por simplicidad, retornamos dict, pero idealmente usar ExtractionSerializer
-            return Response({
-                "id": extraction.id,
-                "study_id": extraction.study_id,
-                "status": extraction.status,
-                "quotes": len(extraction.quotes)  # Ejemplo
-            }, status=status.HTTP_200_OK)
-        except ValueError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except ExtractionValidationError as e:
-            return Response({"error": str(e)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     def create(self, request):
-        serializer = dtos.ExtractionSerializer(data=request.data)
+        serializer = dtos.CreateExtractionInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         command = CreateExtractionCommand(
@@ -55,11 +79,60 @@ class ExtractionViewSet(viewsets.ViewSet):
 
         try:
             extraction = container.create_extraction_handler.handle(command)
-            return Response({"id": extraction.id, "status": extraction.status}, status=status.HTTP_201_CREATED)
-        except ValueError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except ExtractionValidationError as e:
-            return Response({"error": str(e)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+            response_data = {
+                "id": extraction.id,
+                "study_id": extraction.study_id,
+                "status": extraction.status.value,
+                "assigned_to_user_id": extraction.assigned_to_user_id,
+            }
+            return Response(response_data, status=status.HTTP_201_CREATED)
+        except ExtractionException as e:
+            return self._handle_exception(e)
+
+
+    def retrieve(self, request, pk=None):
+        query = GetExtractionQuery(extraction_id=int(pk))
+        try:
+            extraction = container.get_extraction_handler.handle(query)
+
+            data = {
+                "id": extraction.id,
+                "study_id": extraction.study_id,
+                "assigned_to_user_id": extraction.assigned_to_user_id,
+                "status": extraction.status.value,
+                "started_at": extraction.started_at,
+                "completed_at": extraction.completed_at,
+                "is_active": extraction.is_active,
+                "quotes": [
+                    {
+                        "id": q.id,
+                        "text": q.text,
+                        "location": q.location,
+                        "researcher_id": q.researcher_id,
+                        "tags": [
+                            {
+                                "id": t.id,
+                                "name": t.name,
+                                "project_id": t.project_id,
+                                "is_mandatory": t.is_mandatory,
+                                "status": t.status.value,
+                                "visibility": t.visibility.value,
+                                "type": t.type.value,
+                                "created_by_user_id": t.created_by_user_id,
+                                "question_id": t.question_id,
+                            }
+                            for t in q.tags
+                        ]
+                    }
+                    for q in extraction.quotes
+                ]
+            }
+            serializer = dtos.ExtractionDetailSerializer(data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except ExtractionException as e:
+            return self._handle_exception(e)
+
 
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
@@ -67,17 +140,60 @@ class ExtractionViewSet(viewsets.ViewSet):
             extraction_id=int(pk),
             user_id=request.user.id
         )
+
         try:
             container.complete_extraction_handler.handle(command)
-            return Response({"status": "Completed"}, status=status.HTTP_200_OK)
-        except ValueError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except ExtractionValidationError as e:
-            return Response({"error": str(e)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+            return Response(
+                {"status": "completed", "message": "Extracción completada exitosamente"},
+                status=status.HTTP_200_OK
+            )
+        except ExtractionException as e:
+            return self._handle_exception(e)
+
+
+    def list(self, request):
+        query = ListExtractionsQuery(
+            user_id=request.user.id,
+            include_quotes=False
+        )
+        extractions = container.list_extractions_handler.handle(query)
+
+        data = [
+            {
+                "id": e.id,
+                "study_id": e.study_id,
+                "status": e.status.value,
+                "started_at": e.started_at,
+                "completed_at": e.completed_at,
+                "quotes_count": len(e.quotes),
+            }
+            for e in extractions
+        ]
+        serializer = dtos.ExtractionListSerializer(data, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class QuoteViewSet(viewsets.ViewSet):
     """Maneja la entidad secundaria: Quote"""
+
+    def _handle_exception(self, exc: Exception) -> Response:
+        """Reutiliza la misma lógica"""
+        if isinstance(exc, ExtractionNotFound):
+            return Response({"error": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        elif isinstance(exc, UnauthorizedExtractionAccess):
+            return Response({"error": str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        elif isinstance(exc, (TagNotFound, InvalidExtractionState, ExtractionValidationError)):
+            return Response({"error": str(exc)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        elif isinstance(exc, ExtractionException):
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.exception("Error inesperado en QuoteViewSet")
+            return Response(
+                {"error": "Error interno del servidor"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def create(self, request):
         serializer = dtos.CreateQuoteInputSerializer(data=request.data)
@@ -94,15 +210,57 @@ class QuoteViewSet(viewsets.ViewSet):
 
         try:
             quote = container.create_quote_handler.handle(command)
-            return Response({"id": quote.id, "text": quote.text}, status=status.HTTP_201_CREATED)
-        except ValueError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except ExtractionValidationError as e:
-            return Response({"error": str(e)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+            response_data = {
+                "id": quote.id,
+                "text": quote.text,
+                "location": quote.location,
+                "researcher_id": quote.researcher_id,
+                "tags": [
+                    {
+                        "id": t.id,
+                        "name": t.name,
+                        "project_id": t.project_id,
+                        "is_mandatory": t.is_mandatory,
+                        "status": t.status.value,
+                        "visibility": t.visibility.value,
+                        "type": t.type.value,
+                        "created_by_user_id": t.created_by_user_id,
+                        "question_id": t.question_id,
+                    }
+                    for t in quote.tags
+                ]
+            }
+            response_serializer = dtos.QuoteResponseSerializer(response_data)
+            return Response(
+                response_serializer.data,
+                status=status.HTTP_201_CREATED
+            )
+        except ExtractionException as e:
+            return self._handle_exception(e)
 
 
 class TagViewSet(viewsets.ViewSet):
     """Maneja la entidad: Tag (Propuesta y Moderación)"""
+
+    def _handle_exception(self, exc: Exception) -> Response:
+        """Reutiliza la misma lógica"""
+        if isinstance(exc, ExtractionNotFound):
+            return Response({"error": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        elif isinstance(exc, UnauthorizedExtractionAccess):
+            return Response({"error": str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        elif isinstance(exc, (TagNotFound, InvalidExtractionState, ExtractionValidationError)):
+            return Response({"error": str(exc)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        elif isinstance(exc, ExtractionException):
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.exception("Error inesperado en QuoteViewSet")
+            return Response(
+                {"error": "Error interno del servidor"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     def create(self, request):
         serializer = dtos.CreateTagInputSerializer(data=request.data)
@@ -113,16 +271,31 @@ class TagViewSet(viewsets.ViewSet):
             name=data['name'],
             user_id=request.user.id,
             project_id=data['project_id'],
-            is_inductive=data['is_inductive']
+            is_inductive=data['is_inductive'],
+            question_id=data.get('question_id')
         )
 
         try:
             tag = container.create_tag_handler.handle(command)
-            return Response({"id": tag.id, "status": tag.status}, status=status.HTTP_201_CREATED)
-        except ValueError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except ExtractionValidationError as e:
-            return Response({"error": str(e)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+            response_data = {
+                "id": tag.id,
+                "name": tag.name,
+                "project_id": tag.project_id,
+                "is_mandatory": tag.is_mandatory,
+                "status": tag.status.value,
+                "visibility": tag.visibility.value,
+                "type": tag.type.value,
+                "created_by_user_id": tag.created_by_user_id,
+                "question_id": tag.question_id,
+            }
+            response_serializer = dtos.TagResponseSerializer(response_data)
+            return Response(
+                response_serializer.data,
+                status=status.HTTP_201_CREATED
+            )
+        except ExtractionException as e:
+            return self._handle_exception(e)
 
     @action(detail=True, methods=['post'])
     def moderate(self, request, pk=None):

@@ -1,40 +1,60 @@
+# apps/extraction/domain/entities/extraction.py
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional
 from .quote import Quote
 from ..value_objects.extraction_status import ExtractionStatus
-from ..exceptions.extraction_exceptions import ExtractionValidationError
+from ..exceptions.extraction_exceptions import (
+    ExtractionValidationError,
+    InvalidExtractionState
+)
 
 
 @dataclass
 class Extraction:
-    """
-    Aggregate Root.
-    Representa el proceso de extracción de datos de un estudio (antes Paper).
-    """
+    """Aggregate Root"""
     id: Optional[int]
-    study_id: int  # Referencia externa a 'studies' app
+    study_id: int
     assigned_to_user_id: Optional[int]
     status: ExtractionStatus
     quotes: List[Quote] = field(default_factory=list)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
+    MAX_QUOTES = 100
+
     def start_working(self):
         if self.status != ExtractionStatus.PENDING:
-            raise ExtractionValidationError("Solo se pueden iniciar extracciones pendientes.")
+            raise InvalidExtractionState(
+                "Solo se pueden iniciar extracciones pendientes"
+            )
         self.status = ExtractionStatus.IN_PROGRESS
         self.started_at = datetime.now()
 
     def add_quote(self, quote: Quote):
+        if self.status != ExtractionStatus.IN_PROGRESS:
+            raise InvalidExtractionState(
+                "Solo se pueden agregar quotes a extracciones en progreso"
+            )
+
+        if len(self.quotes) >= self.MAX_QUOTES:
+            raise ExtractionValidationError(
+                f"No se pueden agregar más de {self.MAX_QUOTES} quotes"
+            )
+
         self.quotes.append(quote)
 
     def complete(self, missing_mandatory_tags: List[str]):
-        """
-        Intenta completar la extracción. Valida invariantes del dominio.
-        """
+        if self.status != ExtractionStatus.IN_PROGRESS:
+            raise InvalidExtractionState(
+                "Solo se pueden completar extracciones en progreso"
+            )
+
         if not self.quotes:
-            raise ExtractionValidationError("No se puede completar una extracción sin quotes.")
+            raise ExtractionValidationError(
+                "No se puede completar una extracción sin quotes"
+            )
 
         if missing_mandatory_tags:
             raise ExtractionValidationError(

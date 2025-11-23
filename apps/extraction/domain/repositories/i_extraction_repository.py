@@ -18,5 +18,5 @@ class IExtractionRepository(ABC):
         pass
 
     @abstractmethod
-    def list_by_user(self, user_id: int) -> List[Extraction]:
+    def list_by_user(self, user_id: int, include_quotes: bool = False) -> List[Extraction]:
         pass

@@ -1,3 +1,5 @@
+# apps/extraction/application/queries/list_extractions.py
+
 from dataclasses import dataclass
 from typing import List, Optional
 from ...domain.repositories.i_extraction_repository import IExtractionRepository
@@ -8,6 +10,7 @@ from ...domain.entities.extraction import Extraction
 class ListExtractionsQuery:
     user_id: Optional[int] = None
     study_id: Optional[int] = None
+    include_quotes: bool = False
 
 
 class ListExtractionsHandler:
@@ -15,10 +18,9 @@ class ListExtractionsHandler:
         self.repository = repository
 
     def handle(self, query: ListExtractionsQuery) -> List[Extraction]:
-        # Nota: En una implementación real, esto debería soportar paginación
         if query.user_id:
-            return self.repository.list_by_user(query.user_id)
-
-        # Si el repo soporta filtrado por estudio, se llamaría aquí.
-        # Por ahora devolvemos lista vacía o implementación base.
+            return self.repository.list_by_user(
+                query.user_id,
+                include_quotes=query.include_quotes
+            )
         return []
