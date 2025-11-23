@@ -65,14 +65,14 @@ class Container:
 
     @property
     def moderate_tag_handler(self):
-        return ModerateTagHandler(self.tag_repository)
+        return ModerateTagHandler(self.tag_repository, self.project_adapter)
 
     @property
     def merge_tags_handler(self):
         return MergeTagsHandler(
             self.tag_repository,
-            self.quote_repository,
-            self.tag_merger
+            self.tag_merger,
+            self.project_adapter
         )
 
     @property

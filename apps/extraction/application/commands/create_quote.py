@@ -6,6 +6,7 @@ from ...domain.repositories.i_extraction_repository import IExtractionRepository
 from ...domain.repositories.i_quote_repository import IQuoteRepository
 from ...domain.repositories.i_tag_repository import ITagRepository
 from ...domain.repositories.i_acquisition_repository import IAcquisitionRepository
+from ...domain.value_objects.tag_status import TagStatus
 from ...domain.exceptions.extraction_exceptions import (
     ExtractionNotFound,
     UnauthorizedExtractionAccess,
@@ -49,6 +50,10 @@ class CreateQuoteHandler:
             raise UnauthorizedExtractionAccess(
                 "No tienes permiso para agregar quotes a esta extracción"
             )
+        if len(command.tag_ids) != len(set(command.tag_ids)):
+            raise ExtractionValidationError(
+                "No se pueden especificar tags duplicados"
+            )
 
         tags = self.tag_repo.get_by_ids(command.tag_ids)
         if len(tags) != len(command.tag_ids):
@@ -70,7 +75,6 @@ class CreateQuoteHandler:
                     f"El tag '{tag.name}' no pertenece al proyecto actual"
                 )
 
-        from ...domain.value_objects.tag_status import TagStatus
         for tag in tags:
             if tag.status != TagStatus.APPROVED:
                 # Solo permitir tags pending si son del mismo usuario (inductivos)
@@ -90,4 +94,7 @@ class CreateQuoteHandler:
 
         extraction.add_quote(quote)
 
-        return self.quote_repo.save(quote)
+        saved_quote = self.quote_repo.save(quote)
+        self.extraction_repo.save(extraction)
+
+        return saved_quote

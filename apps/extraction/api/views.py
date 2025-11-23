@@ -95,6 +95,21 @@ class ExtractionViewSet(viewsets.ViewSet):
         try:
             extraction = container.get_extraction_handler.handle(query)
 
+            if extraction.assigned_to_user_id != request.user.id:
+                project_id = container.acquisition_adapter.get_project_context(
+                    extraction.study_id
+                )
+                if project_id:
+                    project = container.project_adapter.get_project_by_id(project_id)
+                    if not project or project.owner_id != request.user.id:
+                        raise UnauthorizedExtractionAccess(
+                            "No tienes permiso para ver esta extracción"
+                        )
+                else:
+                    raise UnauthorizedExtractionAccess(
+                        "No tienes permiso para ver esta extracción"
+                    )
+
             data = {
                 "id": extraction.id,
                 "study_id": extraction.study_id,
@@ -325,13 +340,12 @@ class TagViewSet(viewsets.ViewSet):
 
         command = MergeTagsCommand(
             target_tag_id=serializer.validated_data['target_tag_id'],
-            source_tag_id=serializer.validated_data['source_tag_id']
+            source_tag_id=serializer.validated_data['source_tag_id'],
+            user_id=request.user.id
         )
 
         try:
             container.merge_tags_handler.handle(command)
             return Response({"status": "Merged"}, status=status.HTTP_200_OK)
-        except ValueError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except ExtractionValidationError as e:
-            return Response({"error": str(e)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        except ExtractionException as e:
+            return self._handle_exception(e)

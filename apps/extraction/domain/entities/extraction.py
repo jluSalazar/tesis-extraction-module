@@ -33,6 +33,9 @@ class Extraction:
         self.started_at = datetime.now()
 
     def add_quote(self, quote: Quote):
+        if self.status == ExtractionStatus.PENDING:
+            self.start_working()
+
         if self.status != ExtractionStatus.IN_PROGRESS:
             raise InvalidExtractionState(
                 "Solo se pueden agregar quotes a extracciones en progreso"
@@ -43,6 +46,7 @@ class Extraction:
                 f"No se pueden agregar más de {self.MAX_QUOTES} quotes"
             )
 
+        quote.extraction_id = self.id
         self.quotes.append(quote)
 
     def complete(self, missing_mandatory_tags: List[str]):

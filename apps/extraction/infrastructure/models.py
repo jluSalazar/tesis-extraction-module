@@ -75,3 +75,6 @@ class QuoteModel(models.Model):
 
     class Meta:
         db_table = 'extraction_quote'
+        indexes = [
+            models.Index(fields=['extraction', 'created_at']),
+        ]

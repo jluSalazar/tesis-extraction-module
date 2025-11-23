@@ -25,6 +25,8 @@ class Tag:
 
     def approve(self):
         self.status = TagStatus.APPROVED
+        self.visibility = TagVisibility.PUBLIC
 
     def reject(self):
         self.status = TagStatus.REJECTED
+        self.visibility = TagVisibility.PRIVATE

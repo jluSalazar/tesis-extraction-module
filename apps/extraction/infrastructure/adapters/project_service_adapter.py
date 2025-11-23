@@ -3,7 +3,7 @@ from ...domain.repositories.i_project_repository import IProjectRepository
 from ...domain.dtos.project_dtos import ProjectDTO, ProjectMemberDTO, StageDTO
 
 try:
-    from apps.projects.services import ProjectService  # ✅ Usa servicio
+    from apps.projects.services import ProjectService
 except ImportError:
     ProjectService = None
 
