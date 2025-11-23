@@ -1,8 +1,9 @@
-# apps/extraction/container.py
-
+from .application.commands.activate_extraction_phase import ActivateExtractionPhaseHandler
+from .application.commands.configure_extraction_phase import ConfigureExtractionPhaseHandler
 from .infrastructure.adapters.acquisition_service_adapter import AcquisitionServiceAdapter
 from .infrastructure.adapters.design_service_adapter import DesignServiceAdapter
 from .infrastructure.adapters.project_service_adapter import ProjectServiceAdapter
+from .infrastructure.repositories.django_extraction_phase_repository import DjangoExtractionPhaseRepository
 from .infrastructure.repositories.django_extraction_repository import DjangoExtractionRepository
 from .infrastructure.repositories.django_tag_repository import DjangoTagRepository
 from .domain.services.extraction_validator import ExtractionValidator
@@ -26,6 +27,7 @@ class Container:
     design_adapter = DesignServiceAdapter()
     project_adapter = ProjectServiceAdapter()
     tag_repository = DjangoTagRepository(acquisition_adapter)
+    phase_repository = DjangoExtractionPhaseRepository()
 
     # Domain Services
     extraction_validator = ExtractionValidator(tag_repository)
@@ -33,10 +35,25 @@ class Container:
 
     # Command Handlers
     @property
+    def configure_extraction_phase_handler(self):  # ✅
+        return ConfigureExtractionPhaseHandler(
+            self.phase_repository,
+            self.project_adapter
+        )
+
+    @property
+    def activate_extraction_phase_handler(self):  # ✅
+        return ActivateExtractionPhaseHandler(
+            self.phase_repository,
+            self.project_adapter
+        )
+
+    @property
     def create_extraction_handler(self):
         return CreateExtractionHandler(
             self.extraction_repository,
-            self.acquisition_adapter
+            self.acquisition_adapter,
+            self.phase_repository
         )
 
     @property

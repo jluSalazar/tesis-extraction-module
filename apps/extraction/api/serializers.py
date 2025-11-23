@@ -4,6 +4,21 @@ from ..domain.value_objects.extraction_status import ExtractionStatus
 
 # --- WRITE SERIALIZERS (Entrada) ---
 
+class ConfigureExtractionPhaseInputSerializer(serializers.Serializer):
+    """Input para configurar fase de extracción"""
+    mode = serializers.ChoiceField(
+        choices=['Single', 'Double', 'Triple'],
+        help_text="Modo de extracción"
+    )
+    start_date = serializers.DateTimeField(required=False, allow_null=True)
+    end_date = serializers.DateTimeField(required=False, allow_null=True)
+    auto_close = serializers.BooleanField(default=False)
+    allow_late_submissions = serializers.BooleanField(default=False)
+    min_quotes_required = serializers.IntegerField(default=1, min_value=0)
+    max_quotes_per_extraction = serializers.IntegerField(default=100, min_value=1)
+    requires_approval = serializers.BooleanField(default=False)
+
+
 class CreateQuoteInputSerializer(serializers.Serializer):
     extraction_id = serializers.IntegerField()
     text = serializers.CharField(min_length=1, max_length=5000)
@@ -36,6 +51,21 @@ class MergeTagInputSerializer(serializers.Serializer):
 
 
 # --- READ SERIALIZERS (Salida) ---
+class ExtractionPhaseResponseSerializer(serializers.Serializer):
+    """Respuesta de fase de extracción"""
+    id = serializers.IntegerField()
+    project_id = serializers.IntegerField()
+    mode = serializers.CharField()
+    status = serializers.CharField()
+    start_date = serializers.DateTimeField(allow_null=True)
+    end_date = serializers.DateTimeField(allow_null=True)
+    auto_close = serializers.BooleanField()
+    allow_late_submissions = serializers.BooleanField()
+    min_quotes_required = serializers.IntegerField()
+    max_quotes_per_extraction = serializers.IntegerField()
+    requires_approval = serializers.BooleanField()
+    is_open_for_extraction = serializers.BooleanField()
+    expected_extractions_per_study = serializers.IntegerField()
 
 class TagResponseSerializer(serializers.Serializer):
     """Serializer para respuestas de Tag"""

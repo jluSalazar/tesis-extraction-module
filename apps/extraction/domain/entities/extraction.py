@@ -21,8 +21,8 @@ class Extraction:
     quotes: List[Quote] = field(default_factory=list)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
-
-    MAX_QUOTES = 100
+    extraction_order: int = 1
+    max_quotes: int = 100
 
     def start_working(self):
         if self.status != ExtractionStatus.PENDING:
@@ -41,9 +41,9 @@ class Extraction:
                 "Solo se pueden agregar quotes a extracciones en progreso"
             )
 
-        if len(self.quotes) >= self.MAX_QUOTES:
+        if len(self.quotes) >= self.max_quotes:
             raise ExtractionValidationError(
-                f"No se pueden agregar más de {self.MAX_QUOTES} quotes"
+                f"No se pueden agregar más de {self.max_quotes} quotes"
             )
 
         quote.extraction_id = self.id

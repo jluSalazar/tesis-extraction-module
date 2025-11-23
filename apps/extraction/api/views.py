@@ -3,8 +3,9 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from django.db import transaction
 
+from ..application.commands.activate_extraction_phase import ActivateExtractionPhaseCommand
+from ..application.commands.configure_extraction_phase import ConfigureExtractionPhaseCommand
 from ..container import container
 from ..application.commands.create_extraction import CreateExtractionCommand
 from ..application.commands.complete_extraction import CompleteExtractionCommand
@@ -26,6 +27,100 @@ from ..domain.exceptions.extraction_exceptions import (  # ✅
     TagNotFound,
     ProjectAccessDenied,
 )
+
+
+class ExtractionPhaseViewSet(viewsets.ViewSet):
+    """Gestión de la fase de extracción"""
+
+    def retrieve(self, request, pk=None):
+        """Obtener configuración de fase por project_id"""
+        try:
+            phase = container.phase_repository.get_by_project_id(int(pk))
+            if not phase:
+                return Response(
+                    {"error": "Fase de extracción no configurada"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            data = {
+                "id": phase.id,
+                "project_id": phase.project_id,
+                "mode": phase.mode.value,
+                "status": phase.status.value,
+                "start_date": phase.start_date,
+                "end_date": phase.end_date,
+                "auto_close": phase.auto_close,
+                "allow_late_submissions": phase.allow_late_submissions,
+                "min_quotes_required": phase.min_quotes_required,
+                "max_quotes_per_extraction": phase.max_quotes_per_extraction,
+                "requires_approval": phase.requires_approval,
+                "is_open_for_extraction": phase.is_open_for_extraction(),
+                "expected_extractions_per_study": phase.expected_extractions_per_study,
+            }
+
+            serializer = dtos.ExtractionPhaseResponseSerializer(data)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    def create(self, request):
+        """Configurar fase de extracción"""
+        serializer = dtos.ConfigureExtractionPhaseInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        data = serializer.validated_data
+
+        project_id = int(request.query_params.get('project_id'))
+
+        command = ConfigureExtractionPhaseCommand(
+            project_id=project_id,
+            user_id=request.user.id,
+            mode=data['mode'],
+            start_date=data.get('start_date'),
+            end_date=data.get('end_date'),
+            auto_close=data['auto_close'],
+            allow_late_submissions=data['allow_late_submissions'],
+            min_quotes_required=data['min_quotes_required'],
+            max_quotes_per_extraction=data['max_quotes_per_extraction'],
+            requires_approval=data['requires_approval']
+        )
+
+        try:
+            phase = container.configure_extraction_phase_handler.handle(command)
+
+            response_data = {
+                "id": phase.id,
+                "project_id": phase.project_id,
+                "mode": phase.mode.value,
+                "status": phase.status.value,
+                "message": "Fase configurada exitosamente"
+            }
+
+            return Response(response_data, status=status.HTTP_201_CREATED)
+
+        except ExtractionException as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def activate(self, request, pk=None):
+        """Activar fase de extracción"""
+        command = ActivateExtractionPhaseCommand(
+            project_id=int(pk),
+            user_id=request.user.id
+        )
+
+        try:
+            container.activate_extraction_phase_handler.handle(command)
+            return Response(
+                {"status": "activated", "message": "Fase activada"},
+                status=status.HTTP_200_OK
+            )
+        except ExtractionException as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 class ExtractionViewSet(viewsets.ViewSet):
