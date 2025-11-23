@@ -15,8 +15,10 @@ class Tag:
     """
     id: int
     name: str
+    project_id: int
     is_mandatory: bool
     created_by_user_id: int
+    question_id: Optional[int] = None
     status: TagStatus = TagStatus.PENDING
     visibility: TagVisibility = TagVisibility.PRIVATE
     type: TagType = TagType.DEDUCTIVE

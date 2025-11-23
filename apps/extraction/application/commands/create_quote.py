@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import List
 from ...domain.entities.quote import Quote
 from ...domain.repositories.i_extraction_repository import IExtractionRepository
+from ...domain.repositories.i_quote_repository import IQuoteRepository
 from ...domain.repositories.i_tag_repository import ITagRepository
 
 
@@ -15,8 +16,9 @@ class CreateQuoteCommand:
 
 
 class CreateQuoteHandler:
-    def __init__(self, extraction_repo: IExtractionRepository, tag_repo: ITagRepository):
+    def __init__(self, extraction_repo: IExtractionRepository, quote_repo: IQuoteRepository, tag_repo: ITagRepository):
         self.extraction_repo = extraction_repo
+        self.quote_repo = quote_repo
         self.tag_repo = tag_repo
 
     def handle(self, command: CreateQuoteCommand):
@@ -32,6 +34,7 @@ class CreateQuoteHandler:
 
         quote = Quote(
             id=None,
+            extraction_id=command.extraction_id,
             text=command.text,
             location=command.location,
             researcher_id=command.user_id,
@@ -40,5 +43,4 @@ class CreateQuoteHandler:
 
         # Agregar al agregado y guardar
         extraction.add_quote(quote)
-        self.extraction_repo.save(extraction)
-        return quote
+        return self.quote_repo.save(quote)

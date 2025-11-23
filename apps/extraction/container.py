@@ -16,14 +16,14 @@ from .application.commands.merge_tags import MergeTagsHandler
 class Container:
     # Repositories
     extraction_repository = DjangoExtractionRepository()
-    quote_repository = DjangoQuoteRepository()  # Nuevo
+    quote_repository = DjangoQuoteRepository()
     study_adapter = AcquisitionServiceAdapter()
     tag_repository = DjangoTagRepository(study_adapter)
     design_repository = DesignServiceAdapter()
 
     # Domain Services
     extraction_validator = ExtractionValidator(tag_repository)
-    tag_merger = TagMergeService(quote_repository, tag_repository)  # Nuevo
+    tag_merger = TagMergeService(quote_repository, tag_repository)
 
     # Command Handlers
     @property
@@ -36,7 +36,11 @@ class Container:
 
     @property
     def create_quote_handler(self):  # Nuevo
-        return CreateQuoteHandler(self.extraction_repository, self.tag_repository)
+        return CreateQuoteHandler(
+            extraction_repo=self.extraction_repository,
+            quote_repo=self.quote_repository,
+            tag_repo=self.tag_repository
+        )
 
     @property
     def create_tag_handler(self):  # Nuevo

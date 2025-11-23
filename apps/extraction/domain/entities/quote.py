@@ -9,6 +9,7 @@ class Quote:
     Representa un fragmento extraído. Su ciclo de vida depende de Extraction.
     """
     id: Optional[int]
+    extraction_id: Optional[int]
     text: str
     location: str  # ej: "Página 3, párrafo 2"
     researcher_id: int

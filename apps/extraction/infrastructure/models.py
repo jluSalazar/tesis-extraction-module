@@ -2,7 +2,10 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 from ..domain.value_objects.extraction_status import ExtractionStatus
+from ..domain.value_objects.tag_status import TagStatus
 from ..domain.value_objects.tag_type import TagType
+from ..domain.value_objects.tag_visibility import TagVisibility
+
 
 class ExtractionModel(models.Model):
     """Modelo de persistencia para la entidad Extraction."""
@@ -41,17 +44,17 @@ class TagModel(models.Model):
         default=TagType.DEDUCTIVE
     )
     is_mandatory = models.BooleanField(default=False)
-    # 'question_id' reemplaza a la FK directa si 'design' es otra app desacoplada,
-    # pero si es monolito modular, podemos mantener la FK o usar ID.
-    # Asumiremos ID para desacoplamiento estricto.
     question_id = models.IntegerField(null=True, blank=True)
     project_id = models.IntegerField(help_text="Project context ID")
+    created_by_user_id = models.IntegerField(help_text="User ID")
     status = models.CharField(
         max_length=20,
+        choices=[(s.value, s.value) for s in TagStatus],
         default='Pending'  # Mapear con Enum
     )
     visibility = models.CharField(
         max_length=20,
+        choices=[(s.value, s.value) for s in TagVisibility],
         default='Private'
     )
 

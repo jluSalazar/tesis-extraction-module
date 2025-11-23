@@ -1,7 +1,27 @@
 from rest_framework import serializers
 from ..domain.value_objects.extraction_status import ExtractionStatus
-from ..domain.value_objects.tag_status import TagStatus
-from ..domain.value_objects.tag_visibility import TagVisibility
+
+
+class QuoteSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    text = serializers.CharField()
+    location = serializers.CharField(required=False, allow_blank=True)
+    researcher_id = serializers.IntegerField(read_only=True)
+
+    tag_ids = serializers.ListField(
+        child=serializers.IntegerField(), required=False, write_only=True
+    )
+
+class ExtractionSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    study_id = serializers.IntegerField()
+    assigned_to_user_id = serializers.IntegerField(read_only=True)
+    status = serializers.ChoiceField(choices=[s.value for s in ExtractionStatus])
+    started_at = serializers.DateTimeField(read_only=True)
+    completed_at = serializers.DateTimeField(read_only=True)
+    quotes = QuoteSerializer(many=True, read_only=True)
+
+    is_active = serializers.BooleanField(read_only=True)
 
 # --- READ SERIALIZERS (Salida) ---
 

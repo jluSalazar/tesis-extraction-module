@@ -1,14 +1,39 @@
 from typing import List, Optional
+
+from django.db import transaction
+
 from ...domain.repositories.i_quote_repository import IQuoteRepository
 from ...domain.entities.quote import Quote
 from ..models import QuoteModel
 from ..mappers.domain_mappers import QuoteMapper
 
 class DjangoQuoteRepository(IQuoteRepository):
+    @transaction.atomic
     def save(self, quote: Quote) -> Quote:
-        # Lógica para guardar Quote y sus relaciones ManyToMany con Tags
-        # Esto requiere cuidado con los IDs
-        return quote # Placeholder simplificado
+        # 1. Mapear a Dict para el modelo
+        # Nota: No podemos pasar 'tags' directamente en el create/update
+        data = {
+            'extraction_id': quote.extraction_id,  # Asegúrate que la entidad Quote tenga esto
+            'text_portion': quote.text,
+            'location': quote.location,
+            'researcher_id': quote.researcher_id,
+        }
+
+        # 2. Guardar el objeto principal (Quote)
+        if quote.id:
+            QuoteModel.objects.filter(pk=quote.id).update(**data)
+            model = QuoteModel.objects.get(pk=quote.id)
+        else:
+            model = QuoteModel.objects.create(**data)
+            quote.id = model.id  # Asignar ID generado
+
+        # 3. Gestionar relación ManyToMany (Tags)
+        if quote.tags:
+            # Extraemos solo los IDs de los tags de dominio
+            tag_ids = [t.id for t in quote.tags]
+            model.tags.set(tag_ids)  # Django maneja la tabla intermedia aquí
+
+        return QuoteMapper.to_domain(model)
 
     def get_by_id(self, quote_id: int) -> Optional[Quote]:
         try:
