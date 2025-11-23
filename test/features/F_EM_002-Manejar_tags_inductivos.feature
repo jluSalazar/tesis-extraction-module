@@ -1,7 +1,7 @@
 # Created by jona at 28/10/25
 #language: es
 Característica: Gestión de Tags Inductivos (Propuesta y Moderación)
-  Para capturar conceptos emergentes durante la lectura sin ensuciar el protocolo compartido,
+  Para capturar conceptos emergentes durante la lectura sin modificar el protocolo compartido,
   Como Investigador, quiero crear tags personales instantáneos.
   Como Dueño, quiero moderar estos tags para estandarizarlos si aportan valor a todo el equipo.
 
@@ -9,9 +9,9 @@ Característica: Gestión de Tags Inductivos (Propuesta y Moderación)
     Dado que la fase de extracción está activa
 
   Escenario: Investigador crea un tag inductivo para uso personal inmediato
-    Dado que el Investigador "Juan" está extrayendo datos de un paper
+    Dado que el Investigador "Juan" está extrayendo datos de un estudio
     Cuando "Juan" crea un nuevo tag inductivo llamado "Resistencia al cambio"
-    Entonces el sistema debe registrar el tag con:
+    Entonces se debe registrar el tag con:
       | Nombre               | Propietario | Estado                  | Visibilidad |
       | Resistencia al cambio| Juan        | Pendiente de Aprobación | Privada     |
     Y el tag "Resistencia al cambio" debe estar disponible para ser usado por "Juan" en otros papers

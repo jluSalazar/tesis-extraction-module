@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 
-class IStudyRepository(ABC):
+class IAcquisitionRepository(ABC):
     """
     Puerto para comunicarse con el Bounded Context de 'Studies' (o Papers).
     Retorna un DTO o Dict genérico, ya que 'Study' no es una entidad de ESTE dominio.

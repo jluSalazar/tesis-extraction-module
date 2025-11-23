@@ -20,6 +20,7 @@ Característica: Refinamiento del protocolo de extracción
     | ["Cómo afectan las nuevas tecnologías a la eficiencia operativa de las empresas?", "Cuáles son los costos asociados con la implementación de tecnologías emergentes?"]     | [ {"Tag": "Eficiencia", "PI_Relacionada": "Cómo afectan las nuevas tecnologías a la eficiencia operativa de las empresas?"}, {"Tag": "Costos", "PI_Relacionada": "Cuáles son los costos asociados con la implementación de tecnologías emergentes?"}, {"Tag": "Tiempo", "PI_Relacionada": "<Ninguna>"}, {"Tag": "Impacto Ambiental", "PI_Relacionada": "<Ninguna>"} ] | ["Eficiencia", "Costos"]  | Pública            |
 
 
+  #Tambien mostrar la lista de tags obligatorios en la pantalla de extracción
   Esquema del escenario: Validar que un paper no puede marcarse como "Completo" si faltan extracciones obligatorias
     Dada una lista de tags obligatorios para la extracción: <Tags_Obligatorios>
     Y se han registrado las extracciones para los siguientes tags: <Tags_Extraidos>
