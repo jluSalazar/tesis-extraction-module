@@ -28,8 +28,7 @@ class CreateQuoteHandler:
         if extraction.assigned_to_user_id != command.user_id:
             raise ValueError("Unauthorized")
 
-        # Construir entidad Quote
-        tags = [self.tag_repo.get_by_id(tid) for tid in command.tag_ids]
+        tags = self.tag_repo.get_by_ids(command.tag_ids)
 
         quote = Quote(
             id=None,

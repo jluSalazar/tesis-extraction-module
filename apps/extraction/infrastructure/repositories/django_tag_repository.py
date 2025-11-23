@@ -7,6 +7,13 @@ from django.db.models import Q
 
 
 class DjangoTagRepository(ITagRepository):
+    def __init__(self, acquisition_adapter):
+        self.acquisition_adapter = acquisition_adapter
+
+    def get_by_ids(self, tag_ids: List[int]) -> List[Tag]:
+        qs = TagModel.objects.filter(pk__in=tag_ids)
+        return [TagMapper.to_domain(m) for m in qs]
+
     def get_by_id(self, tag_id: int) -> Tag:
         model = TagModel.objects.get(pk=tag_id)
         return TagMapper.to_domain(model)
@@ -30,15 +37,13 @@ class DjangoTagRepository(ITagRepository):
         TagModel.objects.filter(pk=tag.id).delete()
 
     def get_mandatory_tags_for_project_context(self, study_id: int) -> List[Tag]:
-        # Nota: Aquí hay un truco. Necesitamos saber el project_id a partir del study_id.
-        # Opción A: Hacemos una query al Adapter de Study primero.
-        # Opción B: Asumimos que el TagModel tiene project_id y lo filtramos (si ya sabemos el project_id en la capa superior).
-        # Asumiendo que la validación recibe el study_id, necesitamos resolver el project.
-        # Para simplificar este ejemplo, asumiremos que obtenemos tags obligatorios del proyecto asociado al tag.
+        # Opción 1: Join si Study está en la misma DB (Monolito) y tienes FK
+        # Opción 2 (Mejor para desacoplar): Pasar project_id explícitamente desde el Handler
+        # Opción 3 (Tu caso): Obtener project_id vía adapter
 
-        # En una implementación real, deberías inyectar el StudyServiceAdapter aquí o pasar el project_id.
-        qs = TagModel.objects.filter(is_mandatory=True)
-        # TODO: Filtrar por project_id correcto obteniéndolo del study_id
+        # Asumiendo que TagModel tiene project_id
+        project_id = self.acquisition_adapter.get_project_context(study_id)
+        qs = TagModel.objects.filter(project_id=project_id, is_mandatory=True)
         return [TagMapper.to_domain(t) for t in qs]
 
     def list_available_tags_for_user(self, user_id: int, project_id: int) -> List[Tag]:

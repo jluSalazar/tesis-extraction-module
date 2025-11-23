@@ -16,9 +16,9 @@ from .application.commands.merge_tags import MergeTagsHandler
 class Container:
     # Repositories
     extraction_repository = DjangoExtractionRepository()
-    tag_repository = DjangoTagRepository()
     quote_repository = DjangoQuoteRepository()  # Nuevo
     study_adapter = AcquisitionServiceAdapter()
+    tag_repository = DjangoTagRepository(study_adapter)
     design_repository = DesignServiceAdapter()
 
     # Domain Services

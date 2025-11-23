@@ -6,7 +6,7 @@ from ..value_objects.tag_type import TagType
 from ..value_objects.tag_visibility import TagVisibility
 
 
-@dataclass(frozen=True)
+@dataclass
 class Tag:
     """
     Entidad.
@@ -20,3 +20,9 @@ class Tag:
     status: TagStatus = TagStatus.PENDING
     visibility: TagVisibility = TagVisibility.PRIVATE
     type: TagType = TagType.DEDUCTIVE
+
+    def approve(self):
+        self.status = TagStatus.APPROVED
+
+    def reject(self):
+        self.status = TagStatus.REJECTED
