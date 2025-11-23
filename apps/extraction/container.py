@@ -14,6 +14,8 @@ from .application.commands.create_quote import CreateQuoteHandler
 from .application.commands.create_tag import CreateTagHandler
 from .application.commands.moderate_tag import ModerateTagHandler
 from .application.commands.merge_tags import MergeTagsHandler
+from .application.queries.get_extraction import GetExtractionHandler
+from .application.queries.list_extractions import ListExtractionsHandler
 
 
 class Container:
@@ -73,5 +75,11 @@ class Container:
             self.tag_merger
         )
 
+    @property
+    def get_extraction_handler(self):
+        return GetExtractionHandler(self.extraction_repository)
 
+    @property
+    def list_extractions_handler(self):
+        return ListExtractionsHandler(self.extraction_repository)
 container = Container()

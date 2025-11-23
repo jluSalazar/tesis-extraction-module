@@ -5,6 +5,9 @@ from ..models import TagModel
 from ..mappers.domain_mappers import TagMapper
 from django.db.models import Q
 
+from ...domain.value_objects.tag_status import TagStatus
+from ...domain.value_objects.tag_visibility import TagVisibility
+
 
 class DjangoTagRepository(ITagRepository):
     def __init__(self, acquisition_adapter):
@@ -41,7 +44,7 @@ class DjangoTagRepository(ITagRepository):
         qs = TagModel.objects.filter(
             project_id=project_id,
             is_mandatory=True,
-            status='Approved'
+            status=TagStatus.APPROVED.value
         )
         return [TagMapper.to_domain(t) for t in qs]
 
@@ -53,10 +56,10 @@ class DjangoTagRepository(ITagRepository):
         qs = TagModel.objects.filter(
             project_id=project_id
         ).filter(
-            Q(visibility='Public') |
+            Q(visibility=TagVisibility.PUBLIC.value) |
             Q(created_by_user_id=user_id)
         ).filter(
-            status='Approved'
+            status=TagStatus.APPROVED.value
         ).distinct()
 
         return [TagMapper.to_domain(m) for m in qs]

@@ -16,7 +16,7 @@ class Quote:
     tags: List[Tag] = field(default_factory=list)
 
     def add_tag(self, tag: Tag):
-        if tag not in self.tags:
+        if not any(t.id == tag.id for t in self.tags):
             self.tags.append(tag)
 
     def replace_tag(self, old_tag: Tag, new_tag: Tag):

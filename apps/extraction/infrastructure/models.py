@@ -50,12 +50,12 @@ class TagModel(models.Model):
     status = models.CharField(
         max_length=20,
         choices=[(s.value, s.value) for s in TagStatus],
-        default='Pending'  # Mapear con Enum
+        default=TagStatus.PENDING.value
     )
     visibility = models.CharField(
         max_length=20,
         choices=[(s.value, s.value) for s in TagVisibility],
-        default='Private'
+        default=TagVisibility.PRIVATE.value
     )
 
     class Meta:
