@@ -23,14 +23,18 @@ class DjangoTagRepository(ITagRepository):
         data = {
             'name': tag.name,
             'is_mandatory': tag.is_mandatory,
-            'created_by_user_id': tag.created_by_user_id,  # Asegúrate que tu modelo tenga este campo o 'created_by_id'
+            'created_by_user_id': tag.created_by_user_id,
+            'project_id': tag.project_id,
+            'question_id': tag.question_id,
             'status': tag.status.value,
             'visibility': tag.visibility.value,
             'type': tag.type.value
-            # project_id y question_id deberían venir en la entidad o manejarse aquí
         }
 
-        obj, created = TagModel.objects.update_or_create(pk=tag.id, defaults=data)
+        obj, created = TagModel.objects.update_or_create(
+            pk=tag.id,
+            defaults=data
+        )
         return TagMapper.to_domain(obj)
 
     def delete(self, tag: Tag) -> None:

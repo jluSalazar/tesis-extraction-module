@@ -17,8 +17,8 @@ class Container:
     # Repositories
     extraction_repository = DjangoExtractionRepository()
     quote_repository = DjangoQuoteRepository()
-    study_adapter = AcquisitionServiceAdapter()
-    tag_repository = DjangoTagRepository(study_adapter)
+    acquisition_adapter = AcquisitionServiceAdapter()
+    tag_repository = DjangoTagRepository(acquisition_adapter)
     design_repository = DesignServiceAdapter()
 
     # Domain Services
@@ -28,7 +28,7 @@ class Container:
     # Command Handlers
     @property
     def create_extraction_handler(self):
-        return CreateExtractionHandler(self.extraction_repository, self.study_adapter)
+        return CreateExtractionHandler(self.extraction_repository, self.acquisition_adapter)
 
     @property
     def complete_extraction_handler(self):

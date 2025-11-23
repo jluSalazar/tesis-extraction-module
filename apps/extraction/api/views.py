@@ -14,6 +14,7 @@ from ..application.queries.get_extraction import GetExtractionQuery
 from ..application.queries.list_extractions import ListExtractionsQuery
 
 from . import serializers as dtos  # Alias para diferenciar
+from ..domain.exceptions.extraction_exceptions import ExtractionValidationError
 
 
 class ExtractionViewSet(viewsets.ViewSet):
@@ -38,8 +39,10 @@ class ExtractionViewSet(viewsets.ViewSet):
                 "status": extraction.status,
                 "quotes": len(extraction.quotes)  # Ejemplo
             }, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except ExtractionValidationError as e:
+            return Response({"error": str(e)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     def create(self, request):
         serializer = dtos.ExtractionSerializer(data=request.data)
@@ -53,8 +56,10 @@ class ExtractionViewSet(viewsets.ViewSet):
         try:
             extraction = container.create_extraction_handler.handle(command)
             return Response({"id": extraction.id, "status": extraction.status}, status=status.HTTP_201_CREATED)
-        except Exception as e:
+        except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except ExtractionValidationError as e:
+            return Response({"error": str(e)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
@@ -65,8 +70,10 @@ class ExtractionViewSet(viewsets.ViewSet):
         try:
             container.complete_extraction_handler.handle(command)
             return Response({"status": "Completed"}, status=status.HTTP_200_OK)
-        except Exception as e:
+        except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except ExtractionValidationError as e:
+            return Response({"error": str(e)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
 
 class QuoteViewSet(viewsets.ViewSet):
@@ -88,8 +95,10 @@ class QuoteViewSet(viewsets.ViewSet):
         try:
             quote = container.create_quote_handler.handle(command)
             return Response({"id": quote.id, "text": quote.text}, status=status.HTTP_201_CREATED)
-        except Exception as e:
+        except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except ExtractionValidationError as e:
+            return Response({"error": str(e)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
 
 class TagViewSet(viewsets.ViewSet):
@@ -110,8 +119,10 @@ class TagViewSet(viewsets.ViewSet):
         try:
             tag = container.create_tag_handler.handle(command)
             return Response({"id": tag.id, "status": tag.status}, status=status.HTTP_201_CREATED)
-        except Exception as e:
+        except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except ExtractionValidationError as e:
+            return Response({"error": str(e)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     @action(detail=True, methods=['post'])
     def moderate(self, request, pk=None):
@@ -128,8 +139,10 @@ class TagViewSet(viewsets.ViewSet):
         try:
             container.moderate_tag_handler.handle(command)
             return Response({"status": "Moderated"}, status=status.HTTP_200_OK)
-        except Exception as e:
+        except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except ExtractionValidationError as e:
+            return Response({"error": str(e)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
 
     @action(detail=False, methods=['post'], url_path='merge')
     def merge(self, request):
@@ -145,5 +158,7 @@ class TagViewSet(viewsets.ViewSet):
         try:
             container.merge_tags_handler.handle(command)
             return Response({"status": "Merged"}, status=status.HTTP_200_OK)
-        except Exception as e:
+        except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except ExtractionValidationError as e:
+            return Response({"error": str(e)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
