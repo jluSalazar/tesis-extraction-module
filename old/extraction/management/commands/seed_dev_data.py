@@ -9,14 +9,14 @@ import random
 from projects.models import ResearchProject
 from papers.models import Paper
 from design.models import ResearchQuestion
-from extraction.models import ExtractionRecord, Quote, Comment, Tag
+from old.extraction.models import ExtractionRecord, Quote, Comment, Tag
 
 # Importa todas las factories que usarás
 from user_management.factories import UserFactory
 from projects.factories import ProjectFactory
 from papers.factories import PaperFactory
 from design.factories import ResearchQuestionFactory
-from extraction.factories import (
+from old.extraction.factories import (
     ExtractionRecordFactory,
     QuoteFactory,
     TagFactory,

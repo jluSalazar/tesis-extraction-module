@@ -8,8 +8,8 @@ from typing import Optional
 from django.db import transaction
 from django.core.exceptions import ValidationError
 
-from extraction.models import Tag
-from extraction.exceptions import TagValidationError
+from old.extraction.models import Tag
+from old.extraction.exceptions import TagValidationError
 from projects.models import ResearchProject
 from design.models import ResearchQuestion
 

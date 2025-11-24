@@ -84,4 +84,4 @@ htmlcov/
 pytest_cache/
 .cache/
 
-/papers_test/
+/old/papers_test/

@@ -73,7 +73,7 @@ class ErrorHandler(models.Model):
     """
 
     paper = models.ForeignKey(
-        'extraction.PaperExtraction',  # String reference
+        'old.extraction.PaperExtraction',  # String reference
         on_delete=models.CASCADE,
         related_name='extraction_errors'
     )

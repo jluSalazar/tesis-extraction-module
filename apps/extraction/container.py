@@ -1,5 +1,6 @@
 from .application.commands.activate_extraction_phase import ActivateExtractionPhaseHandler
 from .application.commands.configure_extraction_phase import ConfigureExtractionPhaseHandler
+from .application.queries.get_extraction_quotes_with_locations import GetExtractionQuotesWithLocationsHandler
 from .infrastructure.adapters.acquisition_service_adapter import AcquisitionServiceAdapter
 from .infrastructure.adapters.design_service_adapter import DesignServiceAdapter
 from .infrastructure.adapters.project_service_adapter import ProjectServiceAdapter
@@ -99,4 +100,11 @@ class Container:
     @property
     def list_extractions_handler(self):
         return ListExtractionsHandler(self.extraction_repository)
+
+    @property
+    def get_extraction_quotes_handler(self):
+        return GetExtractionQuotesWithLocationsHandler(
+            self.extraction_repository
+        )
+
 container = Container()

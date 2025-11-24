@@ -19,19 +19,29 @@ class ConfigureExtractionPhaseInputSerializer(serializers.Serializer):
     requires_approval = serializers.BooleanField(default=False)
 
 
-class CreateQuoteInputSerializer(serializers.Serializer):
-    extraction_id = serializers.IntegerField()
-    text = serializers.CharField(min_length=1, max_length=5000)
-    location = serializers.CharField(
+class QuoteLocationInputSerializer(serializers.Serializer):
+    """Input para ubicación de quote"""
+    page = serializers.IntegerField(min_value=1)
+    text_location = serializers.CharField(
         required=False,
         allow_blank=True,
         max_length=200
     )
+    x1 = serializers.FloatField(required=False, allow_null=True)
+    y1 = serializers.FloatField(required=False, allow_null=True)
+    x2 = serializers.FloatField(required=False, allow_null=True)
+    y2 = serializers.FloatField(required=False, allow_null=True)
+
+
+class CreateQuoteInputSerializer(serializers.Serializer):
+    extraction_id = serializers.IntegerField()
+    text = serializers.CharField(min_length=1, max_length=5000)
     tag_ids = serializers.ListField(
         child=serializers.IntegerField(),
         allow_empty=False,
         help_text="Lista de IDs de tags a asociar"
     )
+    location = QuoteLocationInputSerializer()
 
 
 class CreateTagInputSerializer(serializers.Serializer):
@@ -80,11 +90,18 @@ class TagResponseSerializer(serializers.Serializer):
     question_id = serializers.IntegerField(allow_null=True)
 
 
+class QuoteLocationResponseSerializer(serializers.Serializer):
+    """Respuesta de ubicación"""
+    page = serializers.IntegerField()
+    text_location = serializers.CharField()
+    coordinates = serializers.DictField(allow_null=True)
+
+
 class QuoteResponseSerializer(serializers.Serializer):
     """Serializer para respuestas de Quote"""
     id = serializers.IntegerField()
     text = serializers.CharField()
-    location = serializers.CharField()
+    location = QuoteLocationResponseSerializer(allow_null=True)
     researcher_id = serializers.IntegerField()
     tags = TagResponseSerializer(many=True)
 

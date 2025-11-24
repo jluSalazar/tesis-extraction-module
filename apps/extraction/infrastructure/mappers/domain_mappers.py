@@ -7,6 +7,7 @@ from ...domain.value_objects.extraction_mode import ExtractionMode
 from ...domain.value_objects.extraction_status import ExtractionStatus
 from ..models import ExtractionModel, QuoteModel, TagModel, ExtractionPhaseModel
 from ...domain.value_objects.phase_status import PhaseStatus
+from ...domain.value_objects.quote_location import QuoteLocation
 from ...domain.value_objects.tag_status import TagStatus
 from ...domain.value_objects.tag_type import TagType
 from ...domain.value_objects.tag_visibility import TagVisibility
@@ -50,7 +51,6 @@ class ExtractionPhaseMapper:
             'requires_approval': entity.requires_approval,
         }
 
-# apps/extraction/infrastructure/mappers/domain_mappers.py
 
 class ExtractionMapper:
     @staticmethod
@@ -119,21 +119,31 @@ class QuoteMapper:
     @staticmethod
     def to_domain(model: QuoteModel) -> Quote:
         tags_domain = [TagMapper.to_domain(t) for t in model.tags.all()]
+        location = None
+        if model.location_data:
+            try:
+                location = QuoteLocation.from_dict(model.location_data)
+            except (KeyError, ValueError):
+                location = None
         return Quote(
             id=model.id,
-            extraction_id=model.extraction_id,  # ✅ Agregar
+            extraction_id=model.extraction_id,
             text=model.text_portion,
-            location=model.location,
             researcher_id=model.researcher_id,
-            tags=tags_domain
+            tags=tags_domain,
+            location=location,
         )
 
     @staticmethod
     def to_db(entity: Quote) -> dict:  # ✅ Nuevo método
         """Retorna diccionario para crear/actualizar modelo Django"""
+        location_data = None
+        if entity.location:
+            location_data = entity.location.to_dict()
         return {
             'extraction_id': entity.extraction_id,
             'text_portion': entity.text,
             'location': entity.location,
             'researcher_id': entity.researcher_id,
+            'location_data': location_data,
         }

@@ -10,7 +10,7 @@ Refactorizado para usar:
 - Mejores prácticas de testing
 """
 
-from behave import given, when, then, step
+from behave import given, when, then
 from django.utils import timezone
 from datetime import timedelta
 import ast
@@ -21,11 +21,11 @@ from projects.factories import ProjectFactory
 from design.factories import ResearchQuestionFactory
 
 # Modelos (importar desde __init__.py)
-from extraction.models import ExtractionPhase, Tag
+from old.extraction.models import ExtractionPhase, Tag
 
 # Servicios (importar desde servicios separados)
-from extraction.services.tag_service import TagService
-from extraction.services.validation_service import ValidationService
+from old.extraction.services.tag_service import TagService
+from old.extraction.services.validation_service import ValidationService
 
 
 # ================================================

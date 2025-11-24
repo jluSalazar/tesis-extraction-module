@@ -8,5 +8,5 @@ router.register(r'quotes', QuoteViewSet, basename='quote')
 router.register(r'tags', TagViewSet, basename='tag')
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path('extraction/', include(router.urls)),
 ]

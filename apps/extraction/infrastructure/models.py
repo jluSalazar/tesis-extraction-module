@@ -182,7 +182,11 @@ class QuoteModel(models.Model):
         related_name='quotes'
     )
     text_portion = models.TextField()
-    location = models.CharField(max_length=100, blank=True)
+    location_data = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Ubicación estructurada: {page, text_location, coordinates}"
+    )
     researcher = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     tags = models.ManyToManyField(TagModel, related_name='quotes', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -192,3 +196,9 @@ class QuoteModel(models.Model):
         indexes = [
             models.Index(fields=['extraction', 'created_at']),
         ]
+
+    def __str__(self):
+        page_info = ""
+        if self.location_data and self.location_data.get('page'):
+            page_info = f" (Pág. {self.location_data['page']})"
+        return f"Quote {self.id}{page_info}: {self.text_portion[:50]}"

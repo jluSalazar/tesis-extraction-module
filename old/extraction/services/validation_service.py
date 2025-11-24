@@ -5,7 +5,7 @@
 """Servicio para validaciones de reglas de negocio."""
 
 from typing import List
-from extraction.models import Tag, PaperExtraction
+from old.extraction.models import Tag, PaperExtraction
 from projects.models import ResearchProject
 from design.models import ResearchQuestion
 

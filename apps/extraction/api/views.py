@@ -1,6 +1,7 @@
 # apps/extraction/api/views.py
-
+from django.shortcuts import render
 from rest_framework import viewsets, status
+from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.decorators import action
 
@@ -27,6 +28,9 @@ from ..domain.exceptions.extraction_exceptions import (  # ✅
     TagNotFound,
     ProjectAccessDenied,
 )
+from ..infrastructure.models import ExtractionModel
+from apps.extraction.infrastructure.adapters.acquisition_service_adapter import (
+    AcquisitionServiceAdapter)
 
 
 class ExtractionPhaseViewSet(viewsets.ViewSet):
@@ -310,12 +314,19 @@ class QuoteViewSet(viewsets.ViewSet):
         serializer.is_valid(raise_exception=True)
 
         data = serializer.validated_data
+        location_data = data.get('location', {})
+
         command = CreateQuoteCommand(
             extraction_id=data['extraction_id'],
             text=data['text'],
-            location=data.get('location', ''),
             user_id=request.user.id,
-            tag_ids=data['tag_ids']
+            tag_ids=data['tag_ids'],
+            page=location_data['page'],
+            text_location=location_data.get('text_location', ''),
+            x1=location_data.get('x1'),
+            y1=location_data.get('y1'),
+            x2=location_data.get('x2'),
+            y2=location_data.get('y2')
         )
 
         try:
@@ -324,12 +335,13 @@ class QuoteViewSet(viewsets.ViewSet):
             response_data = {
                 "id": quote.id,
                 "text": quote.text,
-                "location": quote.location,
+                "location": quote.location.to_dict() if quote.location else None,
                 "researcher_id": quote.researcher_id,
                 "tags": [
                     {
                         "id": t.id,
                         "name": t.name,
+                        "color": t.color,
                         "project_id": t.project_id,
                         "is_mandatory": t.is_mandatory,
                         "status": t.status.value,
@@ -346,6 +358,27 @@ class QuoteViewSet(viewsets.ViewSet):
                 response_serializer.data,
                 status=status.HTTP_201_CREATED
             )
+        except ExtractionException as e:
+            return self._handle_exception(e)
+
+    @action(detail=False, methods=['get'], url_path='extraction/(?P<extraction_id>[^/.]+)')
+    def by_extraction(self, request, extraction_id=None):
+        """
+        Obtiene todos los quotes de una extracción con ubicaciones.
+
+        GET /api/extraction/quotes/extraction/123/
+        """
+        from ..application.queries.get_extraction_quotes_with_locations import (
+            GetExtractionQuotesWithLocationsQuery
+        )
+
+        query = GetExtractionQuotesWithLocationsQuery(
+            extraction_id=int(extraction_id)
+        )
+
+        try:
+            result = container.get_extraction_quotes_handler.handle(query)
+            return Response(result, status=status.HTTP_200_OK)
         except ExtractionException as e:
             return self._handle_exception(e)
 
@@ -444,3 +477,26 @@ class TagViewSet(viewsets.ViewSet):
             return Response({"status": "Merged"}, status=status.HTTP_200_OK)
         except ExtractionException as e:
             return self._handle_exception(e)
+
+
+def pdf_viewer(request, extraction_id):
+    """Vista para el visor de PDF con extracción de quotes"""
+    extraction = get_object_or_404(
+        ExtractionModel.objects.select_related('study'),
+        id=extraction_id
+    )
+
+    acquisition_adapter = AcquisitionServiceAdapter()
+    project_id = acquisition_adapter.get_project_context(extraction.study_id)
+
+    pdf_url = None
+    if hasattr(extraction.study, 'file') and extraction.study.file:
+        pdf_url = extraction.study.file.url
+
+    context = {
+        'extraction': extraction,
+        'project_id': project_id,
+        'pdf_url': pdf_url,
+    }
+
+    return render(request, '', context)

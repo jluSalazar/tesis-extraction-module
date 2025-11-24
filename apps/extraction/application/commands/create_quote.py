@@ -1,11 +1,12 @@
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 from django.db import transaction
 from ...domain.entities.quote import Quote
 from ...domain.repositories.i_extraction_repository import IExtractionRepository
 from ...domain.repositories.i_quote_repository import IQuoteRepository
 from ...domain.repositories.i_tag_repository import ITagRepository
 from ...domain.repositories.i_acquisition_repository import IAcquisitionRepository
+from ...domain.value_objects.quote_location import QuoteLocation
 from ...domain.value_objects.tag_status import TagStatus
 from ...domain.exceptions.extraction_exceptions import (
     ExtractionNotFound,
@@ -20,9 +21,15 @@ from ...domain.exceptions.extraction_exceptions import (
 class CreateQuoteCommand:
     extraction_id: int
     text: str
-    location: str
     user_id: int
     tag_ids: List[int]
+
+    page: int
+    text_location: str = ""
+    x1: Optional[float] = None
+    y1: Optional[float] = None
+    x2: Optional[float] = None
+    y2: Optional[float] = None
 
 
 class CreateQuoteHandler:
@@ -83,13 +90,25 @@ class CreateQuoteHandler:
                         f"El tag '{tag.name}' no está aprobado para uso"
                     )
 
+        try:
+            location = QuoteLocation(
+                page=command.page,
+                text_location=command.text_location,
+                x1=command.x1,
+                y1=command.y1,
+                x2=command.x2,
+                y2=command.y2
+            )
+        except ValueError as e:
+            raise ExtractionValidationError(f"Ubicación inválida: {str(e)}")
+
         quote = Quote(
             id=None,
             extraction_id=command.extraction_id,
             text=command.text,
-            location=command.location,
             researcher_id=command.user_id,
-            tags=tags
+            tags=tags,
+            location=location,
         )
 
         extraction.add_quote(quote)

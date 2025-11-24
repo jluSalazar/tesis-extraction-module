@@ -41,13 +41,15 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
+    'rest_framework',
     'behave_django',
-    'extraction.apps.ExtractionConfig',
-    'projects.apps.ProjectConfig',
-    'design.apps.DesignConfig',
-    'selection.apps.SelectionConfig',
-    'papers.apps.PaperManagementConfig',
-    'user_management.apps.UserManagementConfig'
+
+    'apps.extraction.apps.ExtractionConfig',
+    'apps.projects.apps.ProjectConfig',
+    'apps.design.apps.DesignConfig',
+
+
 ]
 
 MIDDLEWARE = [
@@ -138,4 +140,4 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-AUTH_USER_MODEL = 'user_management.CustomUser'
+#AUTH_USER_MODEL = 'user_management.CustomUser'

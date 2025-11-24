@@ -114,7 +114,7 @@ class Quote(models.Model):
     
     # ACTUALIZADO: FK a PaperExtraction en vez de ExtractionRecord
     paper_extraction = models.ForeignKey(
-        'extraction.PaperExtraction',
+        'old.extraction.PaperExtraction',
         on_delete=models.CASCADE,
         related_name='quotes',
         help_text="Extracción a la que pertenece esta quote"
@@ -126,7 +126,7 @@ class Quote(models.Model):
         help_text="Ubicación en el paper (página, sección, etc.)"
     )
     tags = models.ManyToManyField(
-        'extraction.Tag',
+        'old.extraction.Tag',
         related_name='quotes',
         blank=True
     )
