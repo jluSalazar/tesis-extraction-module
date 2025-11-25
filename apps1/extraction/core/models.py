@@ -1,37 +1,88 @@
 from django.db import models
+from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation
+from django.contrib.contenttypes.models import ContentType
 from django.conf import settings
-from papers.models import Paper
-from extraction.taxonomy.models import Tag  # Dependencia entre módulos (permitida si es necesaria)
 
+
+# --- Value Objects / Helpers ---
+class ExtractionStatus(models.TextChoices):
+    PENDING = 'Pending', 'Pendiente'
+    IN_PROGRESS = 'InProgress', 'En Progreso'
+    DONE = 'Done', 'Completado'
+
+
+# --- Entities ---
 
 class PaperExtraction(models.Model):
-    """Aggregate Root del proceso de extracción."""
+    """
+    Aggregate Root.
+    Representa el proceso de extracción sobre un estudio (Paper).
+    Desacoplado del modelo 'Paper' real mediante study_id.
+    """
+    # ID externo del Paper (App Acquisition)
+    study_id = models.IntegerField(unique=True, db_index=True)
+    # ID externo del Proyecto (App Projects)
+    project_id = models.IntegerField(db_index=True)
 
-    class Status(models.TextChoices):
-        PENDING = 'Pending', 'Pendiente'
-        IN_PROGRESS = 'InProgress', 'En Progreso'
-        DONE = 'Done', 'Completado'
+    status = models.CharField(
+        max_length=50,
+        choices=ExtractionStatus.choices,
+        default=ExtractionStatus.PENDING
+    )
 
-    paper = models.OneToOneField(Paper, on_delete=models.CASCADE, related_name='extraction')
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
-    assigned_to = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    # Asignación (ID de usuario)
+    assigned_to_id = models.IntegerField(null=True, blank=True, db_index=True)
 
-    # 🧠 Business Logic Properties
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['project_id', 'status']),
+            models.Index(fields=['assigned_to_id', 'status']),
+        ]
+
     @property
-    def is_complete(self):
-        return self.status == self.Status.DONE
+    def is_completed(self):
+        return self.status == ExtractionStatus.DONE
 
-    def can_be_finalized(self, mandatory_tags_ids: list[int]) -> bool:
-        """
-        Verifica si cumple las reglas para cerrarse.
-        Recibe IDs externos para no acoplarse fuertemente a la query de Tags aquí.
-        """
-        if not self.quotes.exists():
-            return False
 
-        # Obtener IDs de tags usados en este paper
-        used_tags = set(self.quotes.values_list('tags__id', flat=True))
+class Quote(models.Model):
+    """
+    Entidad dependiente del Aggregate Root (PaperExtraction).
+    """
+    paper_extraction = models.ForeignKey(
+        PaperExtraction,
+        on_delete=models.CASCADE,
+        related_name='quotes'
+    )
+    text_portion = models.TextField()
+    location = models.CharField(max_length=100, blank=True)
 
-        # Verificar que todos los obligatorios estén presentes
-        return set(mandatory_tags_ids).issubset(used_tags)
+    # Relación ManyToMany con Tags (Módulo Taxonomy)
+    # Como Tag está en otro paquete, usamos string reference o importamos si es necesario.
+    # Para mantener pureza, importamos solo el modelo.
+    tags = models.ManyToManyField(
+        'taxonomy.Tag',
+        related_name='quotes',
+        blank=True
+    )
 
+    researcher_id = models.IntegerField()  # User ID
+    validated = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class Comment(models.Model):
+    """
+    Entidad de soporte para feedback.
+    Usa GenericForeignKey para flexibilidad interna (Quotes/Tags).
+    """
+    user_id = models.IntegerField()
+    text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    content_object = GenericForeignKey('content_type', 'object_id')

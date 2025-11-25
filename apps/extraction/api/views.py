@@ -33,7 +33,30 @@ from apps.extraction.infrastructure.adapters.acquisition_service_adapter import 
     AcquisitionServiceAdapter)
 
 
-class ExtractionPhaseViewSet(viewsets.ViewSet):
+class ExceptionHandlerMixin:
+    """Mixin para estandarizar respuestas de error en todos los ViewSets"""
+
+    def _handle_exception(self, exc: Exception) -> Response:
+        if isinstance(exc, ExtractionNotFound):
+            return Response({"error": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        elif isinstance(exc, UnauthorizedExtractionAccess):
+            return Response({"error": str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        elif isinstance(exc, (StudyNotFound, TagNotFound)):
+            return Response({"error": str(exc)}, status=status.HTTP_404_NOT_FOUND)
+        elif isinstance(exc, (ExtractionValidationError, InvalidExtractionState)):
+            return Response({"error": str(exc)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+        elif isinstance(exc, ExtractionException):
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.exception(f"Error inesperado en {self.__class__.__name__}")
+            return Response(
+                {"error": "Error interno del servidor"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class ExtractionPhaseViewSet(ExceptionHandlerMixin, viewsets.ViewSet):
     """Gestión de la fase de extracción"""
 
     def retrieve(self, request, pk=None):
@@ -66,10 +89,7 @@ class ExtractionPhaseViewSet(viewsets.ViewSet):
             return Response(serializer.data, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return self._handle_exception(e)
 
     def create(self, request):
         """Configurar fase de extracción"""
@@ -107,7 +127,7 @@ class ExtractionPhaseViewSet(viewsets.ViewSet):
             return Response(response_data, status=status.HTTP_201_CREATED)
 
         except ExtractionException as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return self._handle_exception(e)
 
     @action(detail=True, methods=['post'])
     def activate(self, request, pk=None):
@@ -124,48 +144,11 @@ class ExtractionPhaseViewSet(viewsets.ViewSet):
                 status=status.HTTP_200_OK
             )
         except ExtractionException as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return self._handle_exception(e)
 
 
-class ExtractionViewSet(viewsets.ViewSet):
+class ExtractionViewSet(ExceptionHandlerMixin, viewsets.ViewSet):
     """Maneja el Aggregate Root: Extraction"""
-
-    def _handle_exception(self, exc: Exception) -> Response:  # ✅ Helper
-        """Maneja excepciones de forma consistente"""
-        if isinstance(exc, ExtractionNotFound):
-            return Response(
-                {"error": str(exc)},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        elif isinstance(exc, UnauthorizedExtractionAccess):
-            return Response(
-                {"error": str(exc)},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        elif isinstance(exc, (StudyNotFound, TagNotFound)):
-            return Response(
-                {"error": str(exc)},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        elif isinstance(exc, (ExtractionValidationError, InvalidExtractionState)):
-            return Response(
-                {"error": str(exc)},
-                status=status.HTTP_422_UNPROCESSABLE_ENTITY
-            )
-        elif isinstance(exc, ExtractionException):
-            return Response(
-                {"error": str(exc)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        else:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.exception("Error inesperado en ExtractionViewSet")
-            return Response(
-                {"error": "Error interno del servidor"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
 
     def create(self, request):
         serializer = dtos.CreateExtractionInputSerializer(data=request.data)
@@ -287,7 +270,7 @@ class ExtractionViewSet(viewsets.ViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-class QuoteViewSet(viewsets.ViewSet):
+class QuoteViewSet(ExceptionHandlerMixin, viewsets.ViewSet):
     """Maneja la entidad secundaria: Quote"""
 
     def _handle_exception(self, exc: Exception) -> Response:
@@ -383,7 +366,7 @@ class QuoteViewSet(viewsets.ViewSet):
             return self._handle_exception(e)
 
 
-class TagViewSet(viewsets.ViewSet):
+class TagViewSet(ExceptionHandlerMixin, viewsets.ViewSet):
     """Maneja la entidad: Tag (Propuesta y Moderación)"""
 
     def _handle_exception(self, exc: Exception) -> Response:
@@ -456,9 +439,9 @@ class TagViewSet(viewsets.ViewSet):
             container.moderate_tag_handler.handle(command)
             return Response({"status": "Moderated"}, status=status.HTTP_200_OK)
         except ValueError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return self._handle_exception(e)
         except ExtractionValidationError as e:
-            return Response({"error": str(e)}, status=status.HTTP_422_UNPROCESSABLE_ENTITY)
+            return self._handle_exception(e)
 
     @action(detail=False, methods=['post'], url_path='merge')
     def merge(self, request):
@@ -481,22 +464,24 @@ class TagViewSet(viewsets.ViewSet):
 
 def pdf_viewer(request, extraction_id):
     """Vista para el visor de PDF con extracción de quotes"""
-    extraction = get_object_or_404(
-        ExtractionModel.objects.select_related('study'),
-        id=extraction_id
-    )
+    try:
+        query = GetExtractionQuery(extraction_id=int(extraction_id))
+        extraction = container.get_extraction_handler.handle(query)
 
-    acquisition_adapter = AcquisitionServiceAdapter()
-    project_id = acquisition_adapter.get_project_context(extraction.study_id)
+        study_details = container.acquisition_adapter.get_study_details(extraction.study_id)
+        project_id = container.acquisition_adapter.get_project_context(extraction.study_id)
 
-    pdf_url = None
-    if hasattr(extraction.study, 'file') and extraction.study.file:
-        pdf_url = extraction.study.file.url
+        pdf_url = study_details.get('file_url') if study_details else None
 
-    context = {
-        'extraction': extraction,
-        'project_id': project_id,
-        'pdf_url': pdf_url,
-    }
+        context = {
+            'extraction': extraction,
+            'project_id': project_id,
+            'pdf_url': pdf_url,
+        }
 
-    return render(request, '', context)
+        return render(request, 'extraction/pdf_viewer.html', context)
+
+    except ExtractionNotFound:
+        return render(request, '404.html', status=404)
+    except Exception:
+        return render(request, '500.html', status=500)
