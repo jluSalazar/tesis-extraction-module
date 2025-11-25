@@ -6,7 +6,6 @@ from apps.extraction.shared.exceptions import BusinessRuleViolation, ResourceNot
 from apps.extraction.taxonomy.services import TagService
 from .repositories import ExtractionRepository
 from .models import ExtractionStatus, PaperExtraction
-from ..taxonomy.repositories import TagRepository
 
 
 class ExtractionService:
@@ -17,19 +16,15 @@ class ExtractionService:
     def initialize_extraction(self, study_id: int) -> Dict[str, Any]:
         """
         Crea un registro de extracción para un paper existente.
-        Consulta el servicio externo de Acquisition.
         """
-        # 1. Obtener datos externos (Hydration)
         study_data = AcquisitionService.get_study_details(study_id)
         if not study_data:
             raise ResourceNotFound(f"Study {study_id} no encontrado en Acquisition.")
 
-        # 2. Verificar duplicados (Idempotencia)
         existing = self.extraction_repo.get_by_study_id(study_id)
         if existing:
             return self._serialize(existing, study_data)
 
-        # 3. Crear Aggregate Root
         extraction = self.extraction_repo.create_extraction(
             study_id=study_id,
             project_id=study_data['project_id']
@@ -37,11 +32,9 @@ class ExtractionService:
 
         return self._serialize(extraction, study_data)
 
-
     def get_extraction_progress(self, extraction_id: int) -> Dict[str, Any]:
         """
         Calcula qué falta para completar la extracción.
-        Usa el Escenario 2 para mostrar 'Tags_Pendientes_Esperados'.
         """
         extraction = self.extraction_repo.get_by_id(extraction_id)
         if not extraction:
@@ -54,36 +47,29 @@ class ExtractionService:
         used_tag_ids = set(
             extraction.quotes.values_list('tags__id', flat=True)
         )
+        used_tag_ids.discard(None)  # Remover None si no hay tags
 
-        # 3. Calcular Delta
         missing_ids = mandatory_ids - used_tag_ids
         missing_names = [mandatory_map[mid] for mid in missing_ids]
 
         status_label = "Completo" if extraction.status == ExtractionStatus.DONE else "Pendiente"
-
-        # Si está en progreso pero ya tiene todo, podríamos sugerir que está listo
         is_ready_to_complete = len(missing_ids) == 0 and extraction.quotes.exists()
 
         return {
             "status": status_label,
             "is_ready_to_complete": is_ready_to_complete,
             "mandatory_tags_count": len(mandatory_ids),
-            "extracted_tags_count": len(used_tag_ids & mandatory_ids),  # Intersección
-            "missing_tags": missing_names  # Lista de nombres para feedback al usuario
+            "extracted_tags_count": len(used_tag_ids & mandatory_ids),
+            "missing_tags": missing_names
         }
 
-
-    def complete_extraction(self, extraction_id: int, user_id: int):
+    def complete_extraction(self, extraction_id: int, user_id: int) -> PaperExtraction:
         """
         Intenta marcar una extracción como completada.
-        Valida reglas de negocio complejas (Tags obligatorios).
         """
         extraction = self.extraction_repo.get_by_id(extraction_id)
         if not extraction:
             raise ResourceNotFound("Extraction not found")
-
-        if extraction.assigned_to_id != user_id:
-            pass
 
         progress = self.get_extraction_progress(extraction_id)
 
@@ -100,19 +86,14 @@ class ExtractionService:
 
         return self.extraction_repo.save(extraction)
 
-
     def _serialize(self, extraction, study_data=None):
-        """
-        Helper para mezclar datos del dominio (estado) con datos externos (título).
-        Patrón DTO (Data Transfer Object).
-        """
         if not study_data:
             study_data = AcquisitionService.get_study_details(extraction.study_id) or {}
 
         return {
             "id": extraction.id,
             "status": extraction.status,
-            "study_title": study_data.get('title', 'Unknown'),  # Dato externo
-            "study_authors": study_data.get('authors', 'Unknown'),  # Dato externo
+            "study_title": study_data.get('title', 'Unknown'),
+            "study_authors": study_data.get('authors', 'Unknown'),
             "quote_count": extraction.quotes.count()
         }

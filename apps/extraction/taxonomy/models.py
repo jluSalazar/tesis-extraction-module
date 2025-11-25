@@ -10,14 +10,17 @@ class Tag(models.Model):
         DEDUCTIVE = 'deductive', _('Deductivo')
         INDUCTIVE = 'inductive', _('Inductivo')
 
+    class ApprovalStatus(models.TextChoices):
+        PENDING = 'pending', _('Pendiente de Aprobación')
+        APPROVED = 'approved', _('Aprobado')
+        REJECTED = 'rejected', _('Rechazado')
+
     name = models.CharField(max_length=100)
     color = models.CharField(max_length=50, default='#FFFFFF')
     justification = models.TextField(blank=True)
     
-    # Referencia débil a Identity Management (Users)
     created_by_id = models.IntegerField(null=True, db_index=True)
     
-    # Referencia débil al Bounded Context 'Design'
     question_id = models.IntegerField(
         null=True, 
         blank=True, 
@@ -25,13 +28,24 @@ class Tag(models.Model):
         help_text="ID de la ResearchQuestion externa"
     )
     
-    # Contexto del proyecto (Multi-tenancy lógico)
     project_id = models.IntegerField(db_index=True)
 
     type = models.CharField(
         max_length=20, 
         choices=TagType.choices, 
         default=TagType.DEDUCTIVE
+    )
+    approval_status = models.CharField(
+        max_length=20,
+        choices=ApprovalStatus.choices,
+        default=ApprovalStatus.APPROVED  # Los deductivos se aprueban automáticamente
+    )
+    merged_into = models.ForeignKey(
+        'self',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='merged_from'
     )
     is_mandatory = models.BooleanField(default=False)
     is_public = models.BooleanField(default=True)

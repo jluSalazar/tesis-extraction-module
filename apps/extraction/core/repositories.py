@@ -5,7 +5,6 @@ from .models import PaperExtraction, Quote, ExtractionStatus
 class ExtractionRepository:
     """
     Repository for the PaperExtraction Aggregate.
-    Handles PaperExtraction and its Quotes.
     """
 
     def get_by_study_id(self, study_id: int) -> Optional[PaperExtraction]:

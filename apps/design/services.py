@@ -2,8 +2,6 @@ from typing import List, Optional, Dict
 from datetime import datetime
 
 
-# from .models import ResearchQuestion <-- COMENTADO TEMPORALMENTE
-
 class DesignService:
     """
     Servicio público de la app Design.
@@ -24,7 +22,7 @@ class DesignService:
 
     @staticmethod
     def get_questions_by_project(project_id: int) -> List[Dict]:
-        # Retorna 2 preguntas dummy siempre
+        """Retorna 2 preguntas dummy siempre"""
         return [
             {
                 "id": 101,

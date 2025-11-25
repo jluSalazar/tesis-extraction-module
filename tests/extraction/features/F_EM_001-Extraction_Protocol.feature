@@ -30,5 +30,5 @@ Característica: Refinamiento del protocolo de extracción
 
   Ejemplos:
     | Tags_Obligatorios                                     | Tags_Extraidos                  | Estado_Esperado | Tags_Pendientes_Esperados |
-    | ["Eficiencia", "Costos", "Tiempo", "Impacto Ambiental"] | ["Tiempo", "Impacto Ambiental"] | "Pendiente"     | ["Eficiencia", "Costos"]  |
-    | ["Eficiencia", "Costos", "Tiempo"]                      | ["Eficiencia", "Costos", "Tiempo"] | "Completo"      | []                        |
+    | ["Eficiencia", "Costos", "Tiempo", "Impacto Ambiental"] | ["Tiempo", "Impacto Ambiental"] | Pendiente     | ["Eficiencia", "Costos"]  |
+    | ["Eficiencia", "Costos", "Tiempo"]                      | ["Eficiencia", "Costos", "Tiempo"] | Completo      | []                        |
