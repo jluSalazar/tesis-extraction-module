@@ -1,7 +1,5 @@
 from typing import List, Optional
-
 from django.db.models import Q
-
 from .models import Tag
 
 
@@ -26,7 +24,7 @@ class TagRepository:
     def get_mandatory_tags(self, project_id: int) -> List[Tag]:
         """Retorna tags obligatorios (deductivos vinculados a PIs)"""
         return list(Tag.objects.filter(
-            project_id=project_id,
+            project_id=project_id, 
             is_mandatory=True,
             merged_into__isnull=True
         ))
@@ -40,9 +38,9 @@ class TagRepository:
         return list(Tag.objects.filter(
             Q(project_id=project_id, merged_into__isnull=True) & (
                 # Tags públicos y aprobados
-                    Q(is_public=True, approval_status=Tag.ApprovalStatus.APPROVED) |
-                    # Tags propios del usuario (cualquier estado)
-                    Q(created_by_id=user_id)
+                Q(is_public=True, approval_status=Tag.ApprovalStatus.APPROVED) |
+                # Tags propios del usuario (cualquier estado)
+                Q(created_by_id=user_id)
             )
         ).distinct())
 
@@ -88,9 +86,9 @@ class TagRepository:
         for quote in source_tag.quotes.all():
             quote.tags.remove(source_tag)
             quote.tags.add(target_tag)
-
+        
         # Marcar como fusionado
         source_tag.merged_into = target_tag
         source_tag.save()
-
+        
         return target_tag
