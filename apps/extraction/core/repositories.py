@@ -3,13 +3,9 @@ from .models import PaperExtraction, Quote, ExtractionStatus
 
 
 class ExtractionRepository:
-    """
-    Repository for the PaperExtraction Aggregate.
-    """
-
     def get_by_study_id(self, study_id: int) -> Optional[PaperExtraction]:
         try:
-            return PaperExtraction.objects.select_related().get(study_id=study_id)
+            return PaperExtraction.objects.get(study_id=study_id)
         except PaperExtraction.DoesNotExist:
             return None
 
@@ -19,15 +15,19 @@ class ExtractionRepository:
         except PaperExtraction.DoesNotExist:
             return None
 
-    def list_by_project(self, project_id: int) -> List[PaperExtraction]:
-        return list(PaperExtraction.objects.filter(project_id=project_id))
+    def list_by_phase(self, extraction_phase_id: int) -> List[PaperExtraction]:
+        return list(PaperExtraction.objects.filter(extraction_phase_id=extraction_phase_id))
 
-    def create_extraction(self, study_id: int, project_id: int) -> PaperExtraction:
+    def create_extraction(self, study_id: int, extraction_phase_id: int) -> PaperExtraction:
         return PaperExtraction.objects.create(
             study_id=study_id,
-            project_id=project_id,
+            extraction_phase_id=extraction_phase_id,
             status=ExtractionStatus.PENDING
         )
+
+    def save(self, extraction: PaperExtraction) -> PaperExtraction:
+        extraction.save()
+        return extraction
 
     def add_quote(self, extraction: PaperExtraction, text: str, user_id: int, tags=None) -> Quote:
         quote = Quote.objects.create(
@@ -38,7 +38,3 @@ class ExtractionRepository:
         if tags:
             quote.tags.set(tags)
         return quote
-
-    def save(self, extraction: PaperExtraction) -> PaperExtraction:
-        extraction.save()
-        return extraction

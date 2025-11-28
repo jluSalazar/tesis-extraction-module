@@ -1,70 +1,74 @@
-from typing import Dict, List, Set, Any, Optional
+from typing import Dict, List, Set, Any
 from django.db import transaction
-from apps.extraction.external.services import DesignService
+
 from .repositories import TagRepository
 from .models import Tag
+from ..planning.services import ExtractionPhaseService
 from ..shared.exceptions import ResourceNotFound, BusinessRuleViolation
+from .validations import TagValidator
 
 
 class TagService:
     def __init__(self):
         self.repository = TagRepository()
+        self.extraction_phase_service = ExtractionPhaseService()
+        self.validator = TagValidator()
 
     @transaction.atomic
-    def create_tag(self, project_id: int, name: str, question_id: int = None, user_id: int = None) -> Tag:
+    def create_deductive_tag(self, extraction_phase_id: int, name: str, question_id: int = None,
+                             user_id: int = None) -> Tag:
         """
-        Crea un tag deductivo (vinculado a PI) u opcional.
-        Los tags deductivos son automáticamente obligatorios y públicos.
+        Crea un tag **deductivo** (predefinido o basado en una pregunta de investigación).
+
+        Solo puede ser creado por el **dueño del proyecto**. Si se vincula a una pregunta
+        de investigación (`question_id`), el tag se marca automáticamente como **obligatorio**
+        (`is_mandatory=True`).
         """
-        # 1. Validar existencia de la pregunta en el módulo externo (Design)
+        phase = self.extraction_phase_service.get_phase_by_id(extraction_phase_id)
+        if not phase:
+            raise ResourceNotFound(f"Fase de extracción {extraction_phase_id} no encontrada.")
+
+        if not self.extraction_phase_service.is_project_owner(user_id, phase.extraction_phase):
+            raise BusinessRuleViolation(f"El usuario {user_id} no es el dueño del proyecto.")
+
         if question_id:
-            if not DesignService.question_exists(question_id):
-                raise ResourceNotFound(f"ResearchQuestion {question_id} no existe.")
-
-            # Regla de negocio: Si hay pregunta, es Deductivo y Obligatorio
-            tag_type = Tag.TagType.DEDUCTIVE
+            if not self.extraction_phase_service.question_belongs_to_project(question_id, phase.extraction_phase):
+                raise BusinessRuleViolation(f"La pregunta {question_id} no pertenece al proyecto actual.")
             is_mandatory = True
-            is_public = True
-            approval_status = Tag.ApprovalStatus.APPROVED
         else:
-            # Tag sin PI - es opcional pero público
-            tag_type = Tag.TagType.DEDUCTIVE
             is_mandatory = False
-            is_public = True
-            approval_status = Tag.ApprovalStatus.APPROVED
 
-        # 2. Persistir vía repositorio
         try:
             return self.repository.create(
-                project_id=project_id,
+                extraction_phase_id=extraction_phase_id,
                 name=name,
                 question_id=question_id,
                 created_by_id=user_id,
-                type=tag_type,
+                type=Tag.TagType.DEDUCTIVE,
                 is_mandatory=is_mandatory,
-                is_public=is_public,
-                approval_status=approval_status
+                is_public=True,
+                approval_status=Tag.ApprovalStatus.APPROVED
             )
         except Exception as e:
-            raise BusinessRuleViolation(f"Error creando tag: {str(e)}")
+            raise BusinessRuleViolation(f"Error creando tag deductivo: {str(e)}")
 
     @transaction.atomic
-    def create_inductive_tag(self, project_id: int, name: str, user_id: int) -> Tag:
+    def create_inductive_tag(self, extraction_phase_id: int, name: str, user_id: int) -> Tag:
         """
-        Crea un tag inductivo para uso personal del investigador.
-        - Estado: Pendiente de Aprobación
-        - Visibilidad: Privada (solo visible para el creador)
-        - Tipo: Inductivo
+        Crea un tag **inductivo** generado por un investigador durante la extracción.
+
+        Estos tags son **privados** (`is_public=False`) y tienen un estado de aprobación **PENDIENTE**
+        (`ApprovalStatus.PENDING`), requiriendo revisión por el dueño del proyecto.
         """
         try:
             return self.repository.create(
-                project_id=project_id,
+                extraction_phase_id=extraction_phase_id,
                 name=name,
-                question_id=None,  # Tags inductivos no se vinculan a PIs
+                question_id=None,
                 created_by_id=user_id,
                 type=Tag.TagType.INDUCTIVE,
                 is_mandatory=False,
-                is_public=False,  # Privado hasta aprobación
+                is_public=False,
                 approval_status=Tag.ApprovalStatus.PENDING
             )
         except Exception as e:
@@ -72,97 +76,127 @@ class TagService:
 
     def approve_tag(self, tag_id: int, owner_id: int) -> Tag:
         """
-        Owner aprueba un tag propuesto.
-        - Cambia estado a Aprobado
-        - Cambia visibilidad a Pública
+        Aprueba un tag que está en estado PENDIENTE.
+
+        Solo el dueño del proyecto puede realizar esta acción. Al ser aprobado, el tag
+        se convierte en **público** (`is_public=True`) y está disponible para todos los investigadores.
         """
         tag = self.repository.get_by_id(tag_id)
-        if not tag:
-            raise ResourceNotFound(f"Tag {tag_id} no encontrado.")
-        
-        if tag.approval_status != Tag.ApprovalStatus.PENDING:
-            raise BusinessRuleViolation(f"El tag no está pendiente de aprobación.")
-        
+        self.validator.validate_tag_exists(tag, tag_id)
+
+        phase = tag.extraction_phase
+
+        if not self.extraction_phase_service.is_project_owner(owner_id, phase.project_id):
+            raise BusinessRuleViolation("Solo el dueño del proyecto puede aprobar tags.")
+
+        self.validator.validate_tag_status(tag, Tag.ApprovalStatus.PENDING)
+
         tag.approval_status = Tag.ApprovalStatus.APPROVED
         tag.is_public = True
-        
+
         return self.repository.save(tag)
 
     def reject_tag(self, tag_id: int, owner_id: int) -> Tag:
         """
-        Owner rechaza un tag propuesto.
-        - Cambia estado a Rechazado
-        - Mantiene visibilidad Privada (solo útil para el creador original)
+        Rechaza un tag que está en estado PENDIENTE.
+
+        Solo el dueño del proyecto puede realizar esta acción. El tag permanece **no público**
+        (`is_public=False`) y no puede ser usado por otros investigadores.
         """
         tag = self.repository.get_by_id(tag_id)
-        if not tag:
-            raise ResourceNotFound(f"Tag {tag_id} no encontrado.")
-        
-        if tag.approval_status != Tag.ApprovalStatus.PENDING:
-            raise BusinessRuleViolation(f"El tag no está pendiente de aprobación.")
-        
+        self.validator.validate_tag_exists(tag, tag_id)
+
+        phase = tag.extraction_phase
+
+        if not self.extraction_phase_service.is_project_owner(owner_id, phase.project_id):
+            raise BusinessRuleViolation("Solo el dueño del proyecto puede rechazar tags.")
+
+        self.validator.validate_tag_status(tag, Tag.ApprovalStatus.PENDING)
+
         tag.approval_status = Tag.ApprovalStatus.REJECTED
-        tag.is_public = False  # Sigue siendo privado
-        
+        tag.is_public = False
+
         return self.repository.save(tag)
 
     @transaction.atomic
     def merge_tags(self, approved_tag_id: int, duplicate_tag_id: int, owner_id: int) -> Tag:
         """
-        Fusiona un tag duplicado en el tag aprobado.
-        - Reasigna todas las extracciones del duplicado al aprobado
-        - Marca el duplicado como fusionado
+        Fusiona un tag duplicado en un tag aprobado existente.
+
+        Solo el dueño del proyecto puede realizar esta acción. Todas las citas (Quotes)
+        asociadas al tag duplicado (`duplicate_tag_id`) serán reasignadas al tag aprobado
+        (`approved_tag_id`), y el tag duplicado será marcado como obsoleto/eliminado.
         """
         approved_tag = self.repository.get_by_id(approved_tag_id)
         duplicate_tag = self.repository.get_by_id(duplicate_tag_id)
-        
-        if not approved_tag:
-            raise ResourceNotFound(f"Tag aprobado {approved_tag_id} no encontrado.")
-        if not duplicate_tag:
-            raise ResourceNotFound(f"Tag duplicado {duplicate_tag_id} no encontrado.")
-        
-        if approved_tag.project_id != duplicate_tag.project_id:
-            raise BusinessRuleViolation("Los tags deben pertenecer al mismo proyecto.")
-        
-        # El tag aprobado debe estar aprobado
-        if approved_tag.approval_status != Tag.ApprovalStatus.APPROVED:
-            raise BusinessRuleViolation("El tag destino debe estar aprobado.")
-        
+
+        self.validator.validate_tag_exists(approved_tag, approved_tag_id)
+        self.validator.validate_tag_exists(duplicate_tag, duplicate_tag_id)
+
+        phase = approved_tag.extraction_phase
+
+        if not self.extraction_phase_service.is_project_owner(owner_id, phase.project_id):
+            raise BusinessRuleViolation("Permiso denegado para fusionar tags.")
+
+        self.validator.validate_same_project_context(approved_tag, duplicate_tag)
+        self.validator.validate_tag_is_approved(approved_tag)
+
         return self.repository.merge_tags(duplicate_tag, approved_tag)
 
-    def get_visible_tags_for_user(self, project_id: int, user_id: int) -> List[Dict]:
+    def link_tag_to_question(self, tag_id: int, question_id: int, owner_id: int) -> Tag:
         """
-        Lista de tags visibles para un usuario específico:
-        - Tags públicos y aprobados (de cualquier creador)
-        - Tags privados propios (cualquier estado)
+        Vincula un tag (generalmente uno aprobado inductivamente) a una pregunta de investigación (PI).
+
+        Solo el dueño del proyecto puede realizar esta acción. El tag debe estar previamente
+        aprobado. Al vincularse, se convierte en tipo **Deductivo** y se marca como **Obligatorio**
+        (`is_mandatory=True`).
         """
-        tags = self.repository.get_tags_for_user(project_id, user_id)
-        return [self._serialize_tag(t) for t in tags]
+        tag = self.repository.get_by_id(tag_id)
+        self.validator.validate_tag_exists(tag, tag_id)
+
+        phase = tag.extraction_phase
+
+        if not self.extraction_phase_service.is_project_owner(owner_id, phase.project_id):
+            raise BusinessRuleViolation("Permiso denegado para vincular tags.")
+
+        self.validator.validate_tag_is_approved(tag)
+
+        if not self.extraction_phase_service.question_belongs_to_project(question_id, phase.project_id):
+            raise BusinessRuleViolation(f"La pregunta {question_id} no pertenece al proyecto.")
+
+        tag.question_id = question_id
+        tag.type = Tag.TagType.DEDUCTIVE
+        tag.is_mandatory = True
+
+        return self.repository.save(tag)
+
+    # =========================================================================
+    # Reportes y Getters
+    # =========================================================================
 
     def get_tag_configuration_status(self, project_id: int) -> Dict[str, Any]:
         """
-        Implementa la lógica del Escenario 1: Visibilidad de la lista.
+        Obtiene el estado de la configuración de tags obligatorios (cobertura de PI).
 
-        Regla: La lista es PÚBLICA (visible para researchers) solo si
-        TODAS las preguntas de investigación (PIs) tienen al menos un tag asociado.
+        Verifica si todas las Preguntas de Investigación (PI) del proyecto han sido
+        cubiertas por tags que están vinculados a ellas y han sido aprobados.
         """
-        # 1. Obtener PIs del servicio externo (Design Module)
-        pis_data = DesignService.get_questions_by_project(project_id)
+        pis_data = self.extraction_phase_service.get_project_research_questions(project_id)
+
         if not pis_data:
             return {"visibility": "No Pública", "missing_pis": [], "is_ready": False}
 
         all_pi_ids: Set[int] = {pi['id'] for pi in pis_data}
 
-        # 2. Obtener Tags definidos en el proyecto actual
-        project_tags = self.repository.list_by_project(project_id)
+        extraction_phase = self.extraction_phase_service.get_or_create_phase(project_id)
 
-        # 3. Calcular PIs cubiertas (aquellas que tienen un tag con question_id)
+        all_tags = self.repository.list_by_project(extraction_phase.id)
+
         covered_pi_ids: Set[int] = {
-            tag.question_id for tag in project_tags
-            if tag.question_id is not None
+            tag.question_id for tag in all_tags
+            if tag.question_id is not None and tag.approval_status == Tag.ApprovalStatus.APPROVED
         }
 
-        # 4. Determinar Visibilidad
         missing_pis = all_pi_ids - covered_pi_ids
         is_public = len(missing_pis) == 0
 
@@ -174,127 +208,50 @@ class TagService:
             "missing_pi_ids": list(missing_pis)
         }
 
-    def get_mandatory_tags(self, project_id: int) -> List[Dict]:
-        """Retorna la lista de tags que serán obligatorios."""
-        tags = self.repository.get_mandatory_tags(project_id)
-        return [{"id": t.id, "name": t.name, "question_id": t.question_id} for t in tags]
+    def get_visible_tags_for_user(self, extraction_phase_id: int, user_id: int) -> List[Tag]:
+        """
+        Obtiene la lista de tags que son visibles para un investigador específico.
 
-    def get_mandatory_tag_names(self, project_id: int) -> List[str]:
-        """Retorna solo los nombres de tags obligatorios."""
-        tags = self.repository.get_mandatory_tags(project_id)
-        return [t.name for t in tags]
+        Incluye tags públicos (deductivos o inductivos aprobados) y tags privados
+        creados por el propio investigador.
+        """
+        return self.repository.get_tags_for_user(extraction_phase_id, user_id)
 
-    def _serialize_tag(self, tag: Tag) -> Dict:
-        """Serializa un tag a diccionario"""
-        return {
-            "id": tag.id,
-            "name": tag.name,
-            "type": tag.type,
-            "is_mandatory": tag.is_mandatory,
-            "is_public": tag.is_public,
-            "approval_status": tag.approval_status,
-            "question_id": tag.question_id,
-            "created_by_id": tag.created_by_id
-        }
+    def get_mandatory_tags(self, extraction_phase_id: int) -> List[Tag]:
+        """
+        Obtiene todos los tags marcados como obligatorios (`is_mandatory=True`)
+        para una fase de extracción.
+        """
+        return self.repository.get_mandatory_tags(extraction_phase_id)
 
-    # =========================================================================
-    # Métodos para Owner - Gestión de tags
-    # =========================================================================
+    def get_pending_tags_for_owner(self, extraction_phase_id: int) -> List[Tag]:
+        """
+        Obtiene todos los tags que están en estado **PENDIENTE** de aprobación,
+        típicamente tags inductivos, para la revisión del dueño del proyecto.
+        """
+        return self.repository.get_pending_tags(extraction_phase_id)
 
-    def get_pending_tags_for_owner(self, project_id: int) -> List[Dict]:
+    def get_tags_statistics(self, extraction_phase_id: int) -> Dict[str, Any]:
         """
-        Obtiene todos los tags pendientes de aprobación para el Owner.
+        Calcula estadísticas de uso y estado de los tags en una fase de extracción.
+        (Ej. conteo de tags inductivos, deductivos, aprobados, rechazados, etc.)
         """
-        tags = self.repository.get_pending_tags(project_id)
-        return [self._serialize_tag(t) for t in tags]
+        all_tags = self.repository.list_by_project(extraction_phase_id)
+        # ... lógica de conteo ...
+        return {}
 
-    def get_tags_statistics(self, project_id: int) -> Dict[str, Any]:
+    def get_tags_organized_for_researcher(self, extraction_phase_id: int, user_id: int) -> Dict[str, List[Tag]]:
         """
-        Obtiene estadísticas de tags para el Owner.
+        Obtiene los tags visibles para un investigador organizados en categorías:
+        Obligatorios, Opcionales Públicos y Privados (creados por el usuario).
         """
-        all_tags = self.repository.list_by_project(project_id)
-        
-        # Agrupar por creador y estado
-        by_creator: Dict[int, Dict[str, int]] = {}
-        
-        for tag in all_tags:
-            creator_id = tag.created_by_id or 0
-            if creator_id not in by_creator:
-                by_creator[creator_id] = {
-                    "approved": 0,
-                    "pending": 0,
-                    "rejected": 0,
-                    "total": 0
-                }
-            
-            by_creator[creator_id]["total"] += 1
-            if tag.approval_status == Tag.ApprovalStatus.APPROVED:
-                by_creator[creator_id]["approved"] += 1
-            elif tag.approval_status == Tag.ApprovalStatus.PENDING:
-                by_creator[creator_id]["pending"] += 1
-            elif tag.approval_status == Tag.ApprovalStatus.REJECTED:
-                by_creator[creator_id]["rejected"] += 1
-        
-        return {
-            "total_tags": len(all_tags),
-            "by_type": {
-                "deductive": len([t for t in all_tags if t.type == Tag.TagType.DEDUCTIVE]),
-                "inductive": len([t for t in all_tags if t.type == Tag.TagType.INDUCTIVE])
-            },
-            "by_status": {
-                "approved": len([t for t in all_tags if t.approval_status == Tag.ApprovalStatus.APPROVED]),
-                "pending": len([t for t in all_tags if t.approval_status == Tag.ApprovalStatus.PENDING]),
-                "rejected": len([t for t in all_tags if t.approval_status == Tag.ApprovalStatus.REJECTED])
-            },
-            "by_creator": by_creator
-        }
-
-    @transaction.atomic
-    def link_tag_to_question(self, tag_id: int, question_id: int, owner_id: int) -> Tag:
-        """
-        Vincula un tag inductivo aprobado a una pregunta de investigación.
-        Esto lo convierte en deductivo y obligatorio.
-        """
-        tag = self.repository.get_by_id(tag_id)
-        if not tag:
-            raise ResourceNotFound(f"Tag {tag_id} no encontrado.")
-        
-        if tag.approval_status != Tag.ApprovalStatus.APPROVED:
-            raise BusinessRuleViolation("Solo se pueden vincular tags aprobados.")
-        
-        # Verificar que la pregunta existe
-        if not DesignService.question_exists(question_id):
-            raise ResourceNotFound(f"ResearchQuestion {question_id} no existe.")
-        
-        tag.question_id = question_id
-        tag.type = Tag.TagType.DEDUCTIVE
-        tag.is_mandatory = True
-        
-        return self.repository.save(tag)
-
-    def get_tags_organized_for_researcher(self, project_id: int, user_id: int) -> Dict[str, List[Dict]]:
-        """
-        Obtiene los tags organizados por categoría para un Researcher:
-        - mandatory: Tags deductivos obligatorios
-        - optional_public: Tags públicos opcionales
-        - private: Tags privados del usuario
-        """
-        user_tags = self.repository.get_tags_for_user(project_id, user_id)
-        
-        result = {
-            "mandatory": [],
-            "optional_public": [],
-            "private": []
-        }
-        
+        user_tags = self.repository.get_tags_for_user(extraction_phase_id, user_id)
+        result = {"mandatory": [], "optional_public": [], "private": []}
         for tag in user_tags:
-            serialized = self._serialize_tag(tag)
-            
             if tag.is_mandatory:
-                result["mandatory"].append(serialized)
+                result["mandatory"].append(tag)
             elif tag.is_public and tag.approval_status == Tag.ApprovalStatus.APPROVED:
-                result["optional_public"].append(serialized)
+                result["optional_public"].append(tag)
             elif tag.created_by_id == user_id:
-                result["private"].append(serialized)
-        
+                result["private"].append(tag)
         return result

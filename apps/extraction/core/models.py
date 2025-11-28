@@ -2,6 +2,8 @@ from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 
+from apps.extraction.planning.models import ExtractionPhase
+
 
 class ExtractionStatus(models.TextChoices):
     PENDING = 'Pending', 'Pendiente'
@@ -11,11 +13,16 @@ class ExtractionStatus(models.TextChoices):
 
 class PaperExtraction(models.Model):
     """
-    Aggregate Root.
-    Representa el proceso de extracción sobre un estudio (Paper).
+    Aggregate Root del Core de Extracción.
+    Vincula un Paper (study_id externo) con una Fase de Extracción.
     """
     study_id = models.IntegerField(unique=True, db_index=True)
-    project_id = models.IntegerField(db_index=True)
+
+    extraction_phase = models.ForeignKey(
+        ExtractionPhase,
+        on_delete=models.CASCADE,
+        related_name='extractions'  # CORREGIDO: antes era 'tags'
+    )
 
     status = models.CharField(
         max_length=50,
@@ -31,14 +38,13 @@ class PaperExtraction(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=['project_id', 'status']),
+            models.Index(fields=['extraction_phase', 'status']),
             models.Index(fields=['assigned_to_id', 'status']),
         ]
 
     @property
     def is_completed(self):
         return self.status == ExtractionStatus.DONE
-
 
 class Quote(models.Model):
     """

@@ -117,3 +117,11 @@ class ProjectService:
             "name": "EXTRACTION",
             "status": "OPENED",
         }
+
+    @classmethod
+    def is_owner(cls, user_id, project_id):
+        pass
+
+    @classmethod
+    def get_questions(cls, project_id):
+        pass

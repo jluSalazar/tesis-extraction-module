@@ -8,6 +8,7 @@ from .repositories import ExtractionPhaseRepository, PaperAssignmentRepository
 from .models import ExtractionPhase, PaperAssignment, ExtractionPhaseStatus
 from ..core.repositories import ExtractionRepository
 from ..core.models import ExtractionStatus
+from ..external.services import ProjectService
 from ..taxonomy.services import TagService
 from ..shared.exceptions import BusinessRuleViolation, ResourceNotFound
 
@@ -269,3 +270,30 @@ class ExtractionPhaseService:
         phase.closed_at = timezone.now()
 
         return self.phase_repo.save(phase)
+
+    def get_phase_by_id(self, extraction_phase_id):
+        pass
+
+    def is_project_owner(self, user_id: int, project_id: int) -> bool:
+        """
+        Delega la consulta al ProjectService.
+        """
+        return ProjectService.is_owner(user_id, project_id)
+
+    def get_project_research_questions(self, project_id: int) -> List[dict]:
+        """
+        Obtiene las preguntas de investigación desde el ProjectService.
+        El ProjectService se encargará de hablar con Design/Extraction/etc internamente.
+        """
+        return ProjectService.get_questions(project_id)
+
+    def question_belongs_to_project(self, question_id: int, project_id: int) -> bool:
+        """
+        Verifica si una pregunta pertenece al proyecto.
+        """
+        # Opción A: Pedir todas las preguntas y buscar (menos eficiente pero desacoplado)
+        questions = self.get_project_research_questions(project_id)
+        return any(q['id'] == question_id for q in questions)
+
+    def get_paper_metadata(self, study_id):
+        pass

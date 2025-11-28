@@ -72,8 +72,8 @@ def step_owner_defines_tags(context, Tags_Definidos):
             question_id = context.pi_map.get(pi_relacionada)
         
         # Crear el tag
-        tag = service.create_tag(
-            project_id=context.project_id,
+        tag = service.create_deductive_tag(
+            extraction_phase_id=context.project_id,
             name=tag_name,
             question_id=question_id,
             user_id=1  # Owner ID
@@ -141,8 +141,8 @@ def step_setup_mandatory_tags(context, Tags_Obligatorios):
     
     # Crear cada tag como obligatorio (vinculado a una PI)
     for idx, name in enumerate(tag_names, start=101):
-        tag = service.create_tag(
-            project_id=context.project_id,
+        tag = service.create_deductive_tag(
+            extraction_phase_id=context.project_id,
             name=name,
             question_id=idx,  # PI ficticia
             user_id=1

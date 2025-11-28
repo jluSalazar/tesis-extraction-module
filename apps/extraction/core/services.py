@@ -1,42 +1,48 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from django.utils import timezone
 from django.db import transaction
+from django.contrib.contenttypes.models import ContentType
 import logging
 
-from apps.extraction.external.services import AcquisitionService
 from apps.extraction.shared.exceptions import BusinessRuleViolation, ResourceNotFound
 from apps.extraction.taxonomy.services import TagService
 from apps.extraction.taxonomy.repositories import TagRepository
+from apps.extraction.planning.services import ExtractionPhaseService # Único punto de contacto
+
 from .repositories import ExtractionRepository
 from .models import ExtractionStatus, PaperExtraction, Quote, Comment
-from django.contrib.contenttypes.models import ContentType
 
 
 logger = logging.getLogger(__name__)
+#TODO crear un dto para la informacion necesaria para el front
 class ExtractionService:
     def __init__(self):
         self.extraction_repo = ExtractionRepository()
         self.tag_service = TagService()
         self.tag_repo = TagRepository()
+        self.phase_service = ExtractionPhaseService()
 
-    def initialize_extraction(self, study_id: int) -> Dict[str, Any]:
+    def initialize_extraction(self, study_id: int, project_id: int) -> Dict[str, Any]:
         """
-        Crea un registro de extracción para un paper existente.
+        Crea o recupera un registro de extracción.
+        Requiere comunicarse con el PhaseService para validar el paper.
         """
-        study_data = AcquisitionService.get_study_details(study_id)
+        study_data = self.phase_service.get_paper_metadata(study_id)
         if not study_data:
-            raise ResourceNotFound(f"Study {study_id} no encontrado en Acquisition.")
+            raise ResourceNotFound(f"Study {study_id} no encontrado o no pertenece al proyecto.")
 
         existing = self.extraction_repo.get_by_study_id(study_id)
         if existing:
-            return self._serialize(existing, study_data)
+            return self._serialize_extraction_with_meta(existing, study_data)
+
+        phase = self.phase_service.get_or_create_phase(project_id)
 
         extraction = self.extraction_repo.create_extraction(
             study_id=study_id,
-            project_id=study_data['project_id']
+            extraction_phase_id=phase.id
         )
 
-        return self._serialize(extraction, study_data)
+        return self._serialize_extraction_with_meta(extraction, study_data)
 
     def get_extraction_by_study(self, study_id: int) -> PaperExtraction:
         """Obtiene la extracción por study_id"""
@@ -46,33 +52,31 @@ class ExtractionService:
         return extraction
 
     def get_extraction_progress(self, extraction_id: int) -> Dict[str, Any]:
-        """
-        Calcula qué falta para completar la extracción.
-        """
+        """Calcula métricas de completitud."""
         extraction = self.extraction_repo.get_by_id(extraction_id)
         if not extraction:
             raise ResourceNotFound("Extraction not found")
 
-        mandatory_tags_objs = self.tag_service.repository.get_mandatory_tags(extraction.project_id)
-        mandatory_map = {t.id: t.name for t in mandatory_tags_objs}
-        mandatory_ids = set(mandatory_map.keys())
+        mandatory_tags = self.tag_service.get_mandatory_tags(extraction.extraction_phase_id)
+        mandatory_ids = {t.id for t in mandatory_tags}
+        mandatory_names_map = {t.id: t.name for t in mandatory_tags}
 
-        used_tag_ids = set(
+        used_ids = set(
             extraction.quotes.values_list('tags__id', flat=True)
         )
-        used_tag_ids.discard(None)  # Remover None si no hay tags
+        used_ids.discard(None)
 
-        missing_ids = mandatory_ids - used_tag_ids
-        missing_names = [mandatory_map[mid] for mid in missing_ids]
+        missing_ids = mandatory_ids - used_ids
+        missing_names = [mandatory_names_map[mid] for mid in missing_ids]
 
-        status_label = "Completo" if extraction.status == ExtractionStatus.DONE else "Pendiente"
-        is_ready_to_complete = len(missing_ids) == 0 and extraction.quotes.exists()
+        is_ready = len(missing_ids) == 0 and extraction.quotes.exists()
 
         return {
-            "status": status_label,
-            "is_ready_to_complete": is_ready_to_complete,
-            "mandatory_tags_count": len(mandatory_ids),
-            "extracted_tags_count": len(used_tag_ids & mandatory_ids),
+            "status": extraction.get_status_display(),
+            "status_code": extraction.status,
+            "is_ready_to_complete": is_ready,
+            "mandatory_total": len(mandatory_ids),
+            "mandatory_covered": len(mandatory_ids) - len(missing_ids),
             "missing_tags": missing_names
         }
 
@@ -81,26 +85,15 @@ class ExtractionService:
                      text_portion: str, location: str = "",
                      tag_names: List[str] = None,
                      new_inductive_tag: str = None) -> Quote:
-        """
-        Crea una quote en una extracción.
-        
-        Args:
-            extraction_id: ID de la extracción
-            researcher_id: ID del researcher que crea la quote
-            text_portion: Texto de la cita
-            location: Ubicación en el documento (opcional)
-            tag_names: Lista de nombres de tags existentes
-            new_inductive_tag: Nombre de un nuevo tag inductivo a crear
-        """
+
         extraction = self.extraction_repo.get_by_id(extraction_id)
         if not extraction:
             raise ResourceNotFound("Extraction not found")
 
-        # Verificar que el researcher tiene permisos (está asignado)
-        if extraction.assigned_to_id and extraction.assigned_to_id != researcher_id:
-            raise BusinessRuleViolation("No tiene permisos para este paper")
+        if not self.phase_service.is_researcher_assigned_to_paper(extraction.study_id, researcher_id,
+                                                                  extraction.extraction_phase_id):
+            raise BusinessRuleViolation("El investigador no está asignado a este paper.")
 
-        # Crear la quote
         quote = Quote.objects.create(
             paper_extraction=extraction,
             text_portion=text_portion,
@@ -108,26 +101,27 @@ class ExtractionService:
             researcher_id=researcher_id
         )
 
-        # Asociar tags existentes
         if tag_names:
-            # Buscar tags disponibles para el usuario (públicos + privados propios)
-            user_tags = self.tag_repo.get_tags_for_user(extraction.project_id, researcher_id)
-            user_tag_map = {t.name: t for t in user_tags}
-            
-            for tag_name in tag_names:
-                if tag_name in user_tag_map:
-                    quote.tags.add(user_tag_map[tag_name])
+            user_tags = self.tag_repo.get_tags_for_user(extraction.extraction_phase_id, researcher_id)
+            tag_map = {t.name: t for t in user_tags}
 
-        # Crear tag inductivo si se especificó
+            tags_to_add = []
+            for name in tag_names:
+                if name in tag_map:
+                    tags_to_add.append(tag_map[name])
+
+            if tags_to_add:
+                quote.tags.add(*tags_to_add)
+
         if new_inductive_tag:
             new_tag = self.tag_service.create_inductive_tag(
-                project_id=extraction.project_id,
+                extraction_phase_id=extraction.extraction_phase_id,
                 name=new_inductive_tag,
                 user_id=researcher_id
             )
             quote.tags.add(new_tag)
 
-        # Actualizar estado de la extracción a En Progreso si estaba Pendiente
+        # Actualizar estado si es necesario
         if extraction.status == ExtractionStatus.PENDING:
             extraction.status = ExtractionStatus.IN_PROGRESS
             self.extraction_repo.save(extraction)
@@ -142,7 +136,7 @@ class ExtractionService:
             raise ResourceNotFound("Quote not found")
 
         content_type = ContentType.objects.get_for_model(Quote)
-        
+
         comment = Comment.objects.create(
             user_id=user_id,
             text=text,
@@ -179,7 +173,7 @@ class ExtractionService:
             raise ResourceNotFound("Extraction not found")
 
         quotes = extraction.quotes.prefetch_related('tags').all()
-        
+
         return [{
             "id": q.id,
             "text_portion": q.text_portion,
@@ -191,22 +185,15 @@ class ExtractionService:
         } for q in quotes]
 
     def complete_extraction(self, extraction_id: int, user_id: int) -> PaperExtraction:
-        """
-        Intenta marcar una extracción como completada.
-        """
         extraction = self.extraction_repo.get_by_id(extraction_id)
         if not extraction:
             raise ResourceNotFound("Extraction not found")
 
         progress = self.get_extraction_progress(extraction_id)
 
-        if progress['missing_tags']:
-            raise BusinessRuleViolation(
-                f"No se puede completar. Faltan los siguientes tags obligatorios: {', '.join(progress['missing_tags'])}"
-            )
-
-        if not extraction.quotes.exists():
-            raise BusinessRuleViolation("Debe extraer al menos una cita (Quote).")
+        if not progress['is_ready_to_complete']:
+            missing = ", ".join(progress['missing_tags'])
+            raise BusinessRuleViolation(f"Faltan tags obligatorios: {missing}")
 
         extraction.status = ExtractionStatus.DONE
         extraction.completed_at = timezone.now()
@@ -215,139 +202,107 @@ class ExtractionService:
 
     def get_researcher_papers(self, project_id: int, researcher_id: int) -> List[Dict[str, Any]]:
         """
-        Obtiene los papers asignados a un researcher con su estado de extracción.
+        Obtiene papers asignados al researcher.
+        Flujo:
+        1. Pide assignments y metadatos a ExtractionPhaseService.
+        2. Cruza con la DB local de PaperExtraction para saber el estado y progreso.
         """
-        from apps.extraction.planning.repositories import PaperAssignmentRepository, ExtractionPhaseRepository
+        assigned_studies = self.phase_service.get_assigned_papers_details(project_id, researcher_id)
 
-        # Asumimos que AcquisitionService es accesible globalmente o importado en el módulo
-
-        phase_repo = ExtractionPhaseRepository()
-        assignment_repo = PaperAssignmentRepository()
-
-        # 1. Obtener Fase
-        try:
-            phase = phase_repo.get_by_project(project_id)
-        except Exception:
+        if not assigned_studies:
             return []
 
-        if not phase:
-            return []
+        study_ids = [s['id'] for s in assigned_studies]
 
-        # 2. Obtener Asignaciones
-        try:
-            assignments = assignment_repo.list_by_researcher(researcher_id, phase.id)
-        except Exception:
-            return []
+        local_extractions = {
+            ext.study_id: ext
+            for ext in PaperExtraction.objects.filter(study_id__in=study_ids)
+        }
 
         result = []
+        for study in assigned_studies:
+            study_id = study['id']
+            extraction = local_extractions.get(study_id)
 
-        # 3. Procesar cada asignación
-        for assignment in assignments:
-            try:
-                extraction = self.extraction_repo.get_by_study_id(assignment.study_id)
-                study_data = AcquisitionService.get_study_details(assignment.study_id)
+            item = {
+                "id": study_id,
+                "study_id": study_id,
+                "title": study['title'],
+                "authors": study['authors'],
+                "pdf_url": study.get('pdf_url', '#'),
+                "extraction_id": extraction.id if extraction else None,
+                "status": extraction.status if extraction else "Pending",
+                "progress": 0.0,
+                "progress_details": None
+            }
 
-                # --- DEFINICIÓN DE DATOS VISUALES Y DE ASIGNACIÓN ---
+            if extraction:
+                prog_data = self.get_extraction_progress(extraction.id)
+                total = prog_data['mandatory_total']
+                covered = prog_data['mandatory_covered']
+                item['progress'] = (covered / total * 100) if total > 0 else 0
+                item['progress_details'] = prog_data
 
-                pdf_url_data = study_data.get('pdf_url', f'/static/pdfs/paper_{assignment.study_id}.pdf')
-                title_data = study_data.get('title', f'Paper #{assignment.study_id}: Título desconocido')
-                authors_data = study_data.get('authors', 'Autor et al.')
-                researcher_name_data = f"Researcher #{researcher_id}"
-
-                if extraction:
-                    progress = self.get_extraction_progress(extraction.id)
-                    status_value = extraction.status.value if hasattr(extraction.status, 'value') else extraction.status
-                else:
-                    progress = None
-                    status_value = "Pending"
-
-                # --- CONSTRUCCIÓN DEL OUTPUT ---
-
-                result.append({
-                    "study_id": assignment.study_id,
-                    "id": assignment.study_id,  # REPLICAMOS CLAVE ID
-
-                    "extraction_id": extraction.id if extraction else None,
-                    "status": status_value,
-                    "progress": progress,
-
-                    "title": title_data,
-                    "authors": authors_data,
-                    "pdf_url": pdf_url_data,
-                    "researcher_id": researcher_id,
-                    "researcher_name": researcher_name_data,
-
-                    "assigned_at": assignment.assigned_at.isoformat()
-                })
-
-            except Exception:
-                # Si falla un paper, lo omitimos (continue)
-                continue
+            result.append(item)
 
         return result
 
     def get_all_papers(self, project_id: int) -> List[Dict[str, Any]]:
         """
-        Obtiene todos los papers (extractions) asociados a un proyecto,
-        independientemente de la asignación o estado, para visualización de Owner.
+        Obtiene TODOS los papers del proyecto (vista Owner).
+        Flujo:
+        1. Pide TODOS los papers del proyecto a ExtractionPhaseService.
+        2. Cruza con asignaciones (también del service) y estado local.
         """
-        try:
-            from apps.extraction.core.models import PaperExtraction
+        all_studies = self.phase_service.get_all_project_papers(project_id)
 
-            # 1. Obtener todas las extracciones para el proyecto
-            extractions = PaperExtraction.objects.filter(project_id=project_id)
+        assignments_map = self.phase_service.get_project_assignments_map(project_id)
 
-        except Exception:
-            return []
+        study_ids = [s['id'] for s in all_studies]
+        local_extractions = {
+            ext.study_id: ext
+            for ext in PaperExtraction.objects.filter(study_id__in=study_ids)
+        }
 
         result = []
+        for study in all_studies:
+            study_id = study['id']
+            ext = local_extractions.get(study_id)
 
-        # 2. Procesar cada extracción para obtener datos externos (Título, PDF, Progreso)
-        for ext in extractions:
-            try:
-                study_data = AcquisitionService.get_study_details(ext.study_id)
+            assignment_info = assignments_map.get(study_id, {})
 
-                # Obtener progreso
-                progress = self.get_extraction_progress(ext.id) if ext.id else None
+            item = {
+                "id": study_id,
+                "study_id": study_id,
+                "title": study['title'],
+                "authors": study['authors'],
+                "pdf_url": study.get('pdf_url', '#'),
 
-                # Asumimos que el researcher_id está en ext.researcher_id o es None
-                researcher_id = ext.researcher_id if hasattr(ext, 'researcher_id') else None
+                "extraction_id": ext.id if ext else None,
+                "status": ext.status if ext else "Pending",
 
-                # Datos visuales (Mock/real si AcquisitionService lo proporciona)
-                pdf_url_data = study_data.get('pdf_url', f'/static/pdfs/paper_{ext.study_id}.pdf')
-                title_data = study_data.get('title', f'Paper #{ext.study_id}: Título desconocido')
-                authors_data = study_data.get('authors', 'Autor et al.')
+                "researcher_id": assignment_info.get('researcher_id'),
+                "researcher_name": assignment_info.get('researcher_name', 'Sin Asignar'),
 
-                result.append({
-                    "study_id": ext.study_id,
-                    "extraction_id": ext.id,
+                "progress": 0.0
+            }
 
-                    "title": title_data,
-                    "authors": authors_data,
-                    "pdf_url": pdf_url_data,
+            if ext:
+                prog = self.get_extraction_progress(ext.id)
+                total = prog['mandatory_total']
+                covered = prog['mandatory_covered']
+                item['progress'] = (covered / total * 100) if total > 0 else 0
 
-                    "status": ext.status.value if hasattr(ext.status, 'value') else ext.status,
-                    "progress": progress,
-
-                    "researcher_id": researcher_id,
-                    "researcher_name": f"Researcher #{researcher_id}" if researcher_id else "Sin asignar",
-                })
-
-            except Exception:
-                # Si falla un paper, lo omitimos
-                continue
+            result.append(item)
 
         return result
 
-
-    def _serialize(self, extraction, study_data=None):
-        if not study_data:
-            study_data = AcquisitionService.get_study_details(extraction.study_id) or {}
-
+    def _serialize_extraction_with_meta(self, extraction, study_data):
         return {
             "id": extraction.id,
+            "study_id": extraction.study_id,
             "status": extraction.status,
-            "study_title": study_data.get('title', 'Unknown'),
-            "study_authors": study_data.get('authors', 'Unknown'),
-            "quote_count": extraction.quotes.count()
+            "title": study_data.get('title', 'Unknown'),
+            "authors": study_data.get('authors', 'Unknown'),
+            "pdf_url": study_data.get('pdf_url')
         }

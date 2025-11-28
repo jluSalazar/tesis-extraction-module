@@ -1,6 +1,8 @@
+from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from apps.extraction.planning.models import ExtractionPhase
 
 class Tag(models.Model):
     """
@@ -19,21 +21,27 @@ class Tag(models.Model):
     name = models.CharField(max_length=100)
     color = models.CharField(max_length=50, default='#FFFFFF')
     justification = models.TextField(blank=True)
-    
-    # Referencia débil a Identity Management (Users)
-    # También sirve como owner_id para tags inductivos privados
-    created_by_id = models.IntegerField(null=True, db_index=True)
-    
-    # Referencia débil al Bounded Context 'Design'
-    question_id = models.IntegerField(
-        null=True, 
-        blank=True, 
-        db_index=True,
-        help_text="ID de la ResearchQuestion externa"
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_tags',
+        db_index=True
     )
-    
-    # Contexto del proyecto (Multi-tenancy lógico)
-    project_id = models.IntegerField(db_index=True)
+
+    question_id = models.IntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="ID de la ResearchQuestion (App Design)"
+    )
+
+    extraction_phase = models.ForeignKey(
+        ExtractionPhase,
+        on_delete=models.CASCADE,
+        related_name='tags'
+    )
 
     type = models.CharField(
         max_length=20, 
@@ -41,7 +49,6 @@ class Tag(models.Model):
         default=TagType.DEDUCTIVE
     )
     
-    # Estado de aprobación para tags inductivos
     approval_status = models.CharField(
         max_length=20,
         choices=ApprovalStatus.choices,
@@ -51,8 +58,7 @@ class Tag(models.Model):
     is_mandatory = models.BooleanField(default=False)
     is_public = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
-    # Para fusión de tags duplicados
+
     merged_into = models.ForeignKey(
         'self',
         null=True,
@@ -62,22 +68,21 @@ class Tag(models.Model):
     )
 
     class Meta:
+        indexes = [
+            models.Index(fields=['extraction_phase', 'approval_status']),
+        ]
         constraints = [
             models.UniqueConstraint(
-                fields=['name', 'project_id', 'question_id'],
-                name='unique_tag_per_context'
+                fields=['extraction_phase', 'name'],
+                name='unique_tag_name_per_phase'
             )
         ]
+        verbose_name = _("Etiqueta")
+        verbose_name_plural = _("Etiquetas")
 
     def __str__(self):
         return f"{self.name} ({self.get_type_display()})"
-    
+
     @property
     def is_active(self) -> bool:
-        """Un tag está activo si no ha sido fusionado en otro"""
         return self.merged_into is None
-    
-    @property
-    def is_visible_to_all(self) -> bool:
-        """Visible para todos si es público y está aprobado"""
-        return self.is_public and self.approval_status == self.ApprovalStatus.APPROVED

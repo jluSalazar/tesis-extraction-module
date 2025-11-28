@@ -64,7 +64,7 @@ class PaperAssignment(models.Model):
     Asignación de un paper a un Researcher para extracción.
     Relaciona el study_id (del módulo Acquisition) con un researcher_id.
     """
-    extraction_phase = models.ForeignKey(
+    extraction_phase_id = models.ForeignKey(
         ExtractionPhase,
         on_delete=models.CASCADE,
         related_name='assignments'

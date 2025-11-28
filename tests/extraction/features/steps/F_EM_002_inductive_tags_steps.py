@@ -58,7 +58,7 @@ def step_create_inductive_tag(context, user_name, tag_name):
     user_id = get_user_id(context, user_name)
     
     tag = service.create_inductive_tag(
-        project_id=context.project_id,
+        extraction_phase_id=context.project_id,
         name=tag_name,
         user_id=user_id
     )
@@ -157,7 +157,7 @@ def step_existing_pending_tag(context, tag_name, user_name):
     user_id = get_user_id(context, user_name)
     
     tag = service.create_inductive_tag(
-        project_id=context.project_id,
+        extraction_phase_id=context.project_id,
         name=tag_name,
         user_id=user_id
     )
@@ -253,7 +253,7 @@ def step_setup_pending_tags(context):
         
         # Crear tag inductivo
         tag = service.create_inductive_tag(
-            project_id=context.project_id,
+            extraction_phase_id=context.project_id,
             name=tag_name,
             user_id=user_id
         )
