@@ -1,5 +1,5 @@
 from typing import Optional, List
-from .models import PaperExtraction, Quote, ExtractionStatus
+from .models import PaperExtraction, Quote, PaperExtractionStatusChoices
 
 
 class ExtractionRepository:
@@ -26,7 +26,7 @@ class ExtractionRepository:
         return PaperExtraction.objects.create(
             study_id=study_id,
             project_id=project_id,
-            status=ExtractionStatus.PENDING
+            status=PaperExtractionStatusChoices.PENDING
         )
 
     def add_quote(self, extraction: PaperExtraction, text: str, user_id: int, tags=None) -> Quote:

@@ -1,76 +1,119 @@
 from django.db import models
-from django.contrib.contenttypes.fields import GenericForeignKey
-from django.contrib.contenttypes.models import ContentType
+from django.contrib.auth import get_user_model
 
 
-class ExtractionStatus(models.TextChoices):
-    PENDING = 'Pending', 'Pendiente'
-    IN_PROGRESS = 'InProgress', 'En Progreso'
-    DONE = 'Done', 'Completado'
+from ..external.models import Study
+from ..shared.audit import AuditModel
+from ..planning.models import ExtractionPhase
+from ..taxonomy.models import Tag
+
+User = get_user_model()
 
 
-class PaperExtraction(models.Model):
-    """
-    Aggregate Root.
-    Representa el proceso de extracción sobre un estudio (Paper).
-    """
-    study_id = models.IntegerField(unique=True, db_index=True)
-    project_id = models.IntegerField(db_index=True)
+class TagTypeChoices:
+    """Opciones para el tipo de Tag."""
+    DEDUCTIVE = 'DEDUCTIVE'
+    INDUCTIVE = 'INDUCTIVE'
 
-    status = models.CharField(
-        max_length=50,
-        choices=ExtractionStatus.choices,
-        default=ExtractionStatus.PENDING
+    CHOICES = [
+        (DEDUCTIVE, 'Deductiva'),
+        (INDUCTIVE, 'Inductiva'),
+    ]
+
+
+class PaperExtractionStatusChoices:
+    """Opciones para el estado de PaperExtraction."""
+    PENDING = 'PENDING'
+    IN_PROGRESS = 'IN_PROGRESS'
+    COMPLETED = 'COMPLETED'
+
+    CHOICES = [
+        (PENDING, 'Pendiente'),
+        (IN_PROGRESS, 'En Progreso'),
+        (COMPLETED, 'Completado'),
+    ]
+
+
+class PaperExtraction(AuditModel):
+    """Representa un archivo PDF o documento de donde se extraerá la información."""
+
+    study = models.ForeignKey(
+        Study,
+        on_delete=models.CASCADE,
+        related_name='paper_extractions',
+        verbose_name="Estudio Relacionado (Acquisition)"
     )
-
-    assigned_to_id = models.IntegerField(null=True, blank=True, db_index=True)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(
+        max_length=15,
+        choices=PaperExtractionStatusChoices.CHOICES,
+        default=PaperExtractionStatusChoices.PENDING,
+        verbose_name="Estado de la Extracción"
+    )
+    extraction_phase = models.ForeignKey(
+        ExtractionPhase,
+        on_delete=models.CASCADE,
+        related_name='papers_to_extract',
+        verbose_name="Fase de Extracción"
+    )
+    assigned_to = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assigned_extractions',
+        verbose_name="Asignado A"
+    )
+    # Usar FilePathField o FileField, dependiendo de si el archivo se sube o se referencia.
+    path = models.CharField(max_length=500, verbose_name="Ruta o URL del Documento")
 
     class Meta:
-        indexes = [
-            models.Index(fields=['project_id', 'status']),
-            models.Index(fields=['assigned_to_id', 'status']),
-        ]
+        verbose_name = "Extracción de Paper"
+        verbose_name_plural = "Extracciones de Papers"
+        # Un paper puede ser asignado a una fase una sola vez
+        unique_together = ('study', 'extraction_phase')
 
-    @property
-    def is_completed(self):
-        return self.status == ExtractionStatus.DONE
+    def __str__(self):
+        return f"Extracción de {self.study.title} en {self.extraction_phase.project.name}"
 
 
-class Quote(models.Model):
-    """
-    Entidad dependiente del Aggregate Root (PaperExtraction).
-    """
+# =================================================================
+# 3. Entidad Hija (Quote - contenida en PaperExtraction)
+# =================================================================
+
+class Quote(AuditModel):
+    """Extracciones de texto (citas) de un documento (PaperExtraction)."""
+
+    text_fragment = models.TextField(verbose_name="Fragmento de Texto Extraído")
+    # Usa JSONField para almacenar la ubicación estructurada
+    location = models.JSONField(
+        default=dict,
+        verbose_name="Ubicación (Página, Párrafo, etc.)"
+    )
     paper_extraction = models.ForeignKey(
         PaperExtraction,
         on_delete=models.CASCADE,
-        related_name='quotes'
-    )
-    text_portion = models.TextField()
-    location = models.CharField(max_length=100, blank=True)
-
-    tags = models.ManyToManyField(
-        'extraction.Tag',
         related_name='quotes',
-        blank=True
+        verbose_name="Paper de Origen"
+    )
+    tags = models.ManyToManyField(
+        Tag,
+        related_name='quotes',
+        verbose_name="Etiquetas Aplicadas"
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='created_quotes',
+        verbose_name="Creado Por"
     )
 
-    researcher_id = models.IntegerField()
-    validated = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        verbose_name = "Cita de Extracción"
+        verbose_name_plural = "Citas de Extracción"
+        # Ordenar las citas por fecha de creación o ID
+        ordering = ['created_at']
 
-
-class Comment(models.Model):
-    """
-    Entidad de soporte para feedback.
-    """
-    user_id = models.IntegerField()
-    text = models.TextField()
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    object_id = models.PositiveIntegerField()
-    content_object = GenericForeignKey('content_type', 'object_id')
+    def __str__(self):
+        # Muestra los primeros 50 caracteres del fragmento
+        return f"Cita de '{self.text_fragment[:50]}...' de {self.paper_extraction.study.title}"

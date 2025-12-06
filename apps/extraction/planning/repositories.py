@@ -1,5 +1,5 @@
 from typing import List, Optional
-from .models import ExtractionPhase, PaperAssignment, ExtractionPhaseStatus
+from .models import ExtractionPhase, ExtractionStatusChoices
 
 
 class ExtractionPhaseRepository:
@@ -27,11 +27,11 @@ class ExtractionPhaseRepository:
     def get_or_create(self, project_id: int) -> ExtractionPhase:
         phase, created = ExtractionPhase.objects.get_or_create(
             project_id=project_id,
-            defaults={'status': ExtractionPhaseStatus.CONFIGURATION}
+            defaults={'status': ExtractionStatusChoices.CONFIG}
         )
         return phase
 
-
+'''
 class PaperAssignmentRepository:
     """Repository para PaperAssignment"""
 
@@ -79,3 +79,4 @@ class PaperAssignmentRepository:
         """Retorna el researcher_id asignado a un study"""
         assignment = self.get_by_study_and_phase(study_id, phase_id)
         return assignment.researcher_id if assignment else None
+'''
